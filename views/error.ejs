@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>خطأ — SkyTicket Pro</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="error-page">
+    <div class="error-card">
+      <div class="error-code">⚠️</div>
+      <div class="error-msg"><%= message || 'حدث خطأ غير متوقع' %></div>
+      <div class="error-sub">يمكنك العودة ومحاولة مجدداً</div>
+      <a href="/dashboard" class="btn btn-primary">← العودة للوحة التحكم</a>
+    </div>
+  </div>
+</body>
+</html>

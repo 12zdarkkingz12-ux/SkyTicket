@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <title>لوحة التحكم - SkyTicket</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>🎫 لوحة التحكم</h1>
+    <p>مرحباً <strong><%= user.username %></strong></p>
+    <a href="/logout" class="btn btn-danger">تسجيل خروج</a>
+    <h2>السيرفرات المتاحة</h2>
+    <div class="guilds">
+      <% guilds.forEach(g => { %>
+        <a href="/guild/<%= g.id %>" class="guild-card">
+          <% if (g.icon) { %>
+            <img src="https://cdn.discordapp.com/icons/<%= g.id %>/<%= g.icon %>.png" alt="icon">
+          <% } %>
+          <span><%= g.name %></span>
+        </a>
+      <% }) %>
+    </div>
+  </div>
+</body>
+</html>

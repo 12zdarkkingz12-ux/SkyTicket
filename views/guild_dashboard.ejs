@@ -1,0 +1,1602 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= guild.name %> — SkyTicket Pro</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════
+     DATA  (server → client)
+═══════════════════════════════════════════════════════════ -->
+<script>
+  const GUILD_ID   = '<%= guild.id %>';
+  const GUILD_NAME = '<%- JSON.stringify(guild.name) %>';
+  const STATS      = <%- JSON.stringify(stats) %>;
+  const PANELS     = <%- JSON.stringify(panels) %>;
+  const STAFF      = <%- JSON.stringify(staff) %>;
+  const KEYWORDS   = <%- JSON.stringify(keywords) %>;
+  const TICKETS    = <%- JSON.stringify(tickets) %>;
+  const BANS       = <%- JSON.stringify(bans) %>;
+  const LOGS       = <%- JSON.stringify(logs) %>;
+  const GUILD_DATA = <%- JSON.stringify(guildData) %>;
+</script>
+
+<div class="layout">
+
+<!-- ══════════════════════════════════════════════════════════
+     SIDEBAR
+═══════════════════════════════════════════════════════════ -->
+<nav class="sidebar">
+
+  <div class="sidebar-brand">
+    <a href="#" class="brand-logo">
+      <span class="icon">🌌</span>
+      <div>
+        <div>SkyTicket</div>
+        <div class="brand-ver">Pro v2.0</div>
+      </div>
+    </a>
+  </div>
+
+  <div class="sidebar-guild">
+    <div class="guild-card">
+      <% if (guild.icon) { %>
+        <img src="<%= guild.icon %>" class="guild-icon" alt="icon">
+      <% } else { %>
+        <div class="guild-icon-placeholder">🏠</div>
+      <% } %>
+      <div>
+        <div class="guild-name"><%= guild.name %></div>
+        <div class="guild-badge">● مُتصل</div>
+      </div>
+    </div>
+  </div>
+
+  <ul class="sidebar-nav">
+    <li class="nav-section-label">الرئيسية</li>
+
+    <li class="nav-item active" data-tab="overview">
+      <span class="nav-icon">📊</span>
+      <span>نظرة عامة</span>
+    </li>
+
+    <li class="nav-section-label">إدارة التذاكر</li>
+
+    <li class="nav-item" data-tab="panels">
+      <span class="nav-icon">🗂️</span>
+      <span>اللوحات</span>
+      <span class="nav-badge"><%= panels.length %></span>
+    </li>
+
+    <li class="nav-item" data-tab="tickets">
+      <span class="nav-icon">🎫</span>
+      <span>التذاكر</span>
+      <span class="nav-badge"><%= stats.openTickets %></span>
+    </li>
+
+    <li class="nav-item" data-tab="staff">
+      <span class="nav-icon">👥</span>
+      <span>فريق الدعم</span>
+    </li>
+
+    <li class="nav-item" data-tab="keywords">
+      <span class="nav-icon">💬</span>
+      <span>الردود التلقائية</span>
+    </li>
+
+    <li class="nav-section-label">الإدارة</li>
+
+    <li class="nav-item" data-tab="bans">
+      <span class="nav-icon">🚫</span>
+      <span>الحظر</span>
+      <% if (bans.length) { %>
+        <span class="nav-badge" style="background:var(--danger)"><%= bans.length %></span>
+      <% } %>
+    </li>
+
+    <li class="nav-item" data-tab="settings">
+      <span class="nav-icon">⚙️</span>
+      <span>الإعدادات</span>
+    </li>
+
+    <li class="nav-item" data-tab="logs">
+      <span class="nav-icon">📋</span>
+      <span>السجلات</span>
+    </li>
+
+  </ul>
+
+  <div class="sidebar-user">
+    <img src="https://cdn.discordapp.com/avatars/<%= user.id %>/<%= user.avatar %>.png?size=64"
+         class="user-avatar" alt="avatar"
+         onerror="this.src='https://cdn.discordapp.com/embed/avatars/0.png'">
+    <div class="user-info">
+      <div class="user-name"><%= user.username %></div>
+      <div class="user-role">مدير</div>
+    </div>
+    <a href="/logout" class="logout-btn" title="تسجيل الخروج">↩</a>
+  </div>
+
+</nav>
+
+<!-- ══════════════════════════════════════════════════════════
+     MAIN CONTENT
+═══════════════════════════════════════════════════════════ -->
+<main class="main">
+
+<!-- ──────────────────────────────────────────────────────────
+     TAB: OVERVIEW
+────────────────────────────────────────────────────────── -->
+<div id="tab-overview" class="tab-content active">
+  <div class="page-header">
+    <div>
+      <div class="page-title">نظرة عامة 📊</div>
+      <div class="page-subtitle">إحصائيات نظام التذاكر لسيرفر <%= guild.name %></div>
+    </div>
+    <div class="page-actions">
+      <button class="btn btn-ghost btn-sm" onclick="refreshStats()">🔄 تحديث</button>
+    </div>
+  </div>
+  <div class="page-body">
+
+    <!-- Stats Cards -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <span class="stat-icon">🎫</span>
+        <div class="stat-value counter" data-target="<%= stats.totalTickets %>">0</div>
+        <div class="stat-label">إجمالي التذاكر</div>
+      </div>
+      <div class="stat-card success">
+        <span class="stat-icon">🟢</span>
+        <div class="stat-value counter" data-target="<%= stats.openTickets %>">0</div>
+        <div class="stat-label">تذاكر مفتوحة</div>
+      </div>
+      <div class="stat-card warning">
+        <span class="stat-icon">✅</span>
+        <div class="stat-value counter" data-target="<%= stats.closedToday %>">0</div>
+        <div class="stat-label">مغلقة اليوم</div>
+      </div>
+      <div class="stat-card purple">
+        <span class="stat-icon">👥</span>
+        <div class="stat-value counter" data-target="<%= stats.totalStaff %>">0</div>
+        <div class="stat-label">فريق الدعم</div>
+      </div>
+      <div class="stat-card danger">
+        <span class="stat-icon">⭐</span>
+        <div class="stat-value"><%= stats.avgRating || '—' %></div>
+        <div class="stat-label">متوسط التقييم</div>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="charts-row">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">📈 التذاكر — آخر 7 أيام</div>
+        </div>
+        <div class="chart-wrapper">
+          <canvas id="chartDaily"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">🥇 أفضل فريق الدعم</div>
+        </div>
+        <div id="staffLeaderboard" style="display:flex;flex-direction:column;gap:8px;"></div>
+      </div>
+    </div>
+
+    <!-- Recent Tickets -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">🎫 آخر التذاكر</div>
+        <button class="btn btn-ghost btn-sm" onclick="showTab('tickets')">عرض الكل ←</button>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>المستخدم</th>
+              <th>اللوحة</th>
+              <th>الحالة</th>
+              <th>الأولوية</th>
+              <th>التاريخ</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% const recent = tickets.slice(0, 8); %>
+            <% if (recent.length === 0) { %>
+              <tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:32px">لا توجد تذاكر بعد</td></tr>
+            <% } else { %>
+              <% recent.forEach(t => { %>
+              <tr>
+                <td><span style="color:var(--accent);font-weight:700">#<%= t.id %></span></td>
+                <td><code style="background:var(--bg3);padding:2px 6px;border-radius:4px;font-size:12px"><%= t.userTag %></code></td>
+                <td><%= t.panelName %></td>
+                <td>
+                  <% if(t.status==='open')    { %><span class="badge badge-open">🟢 مفتوحة</span>
+                  <% } else if(t.status==='claimed') { %><span class="badge badge-claimed">✋ مستلمة</span>
+                  <% } else { %><span class="badge badge-closed">🔒 مغلقة</span><% } %>
+                </td>
+                <td>
+                  <% const pr = {low:'🟢',normal:'🔵',high:'🟡',urgent:'🔴'}; %>
+                  <span class="badge badge-<%= t.priority %>"><%= pr[t.priority]||'🔵' %> <%= t.priority %></span>
+                </td>
+                <td style="color:var(--text-muted);font-size:12px"><%= new Date(t.created_at).toLocaleDateString('ar-SA') %></td>
+              </tr>
+              <% }) %>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ──────────────────────────────────────────────────────────
+     TAB: PANELS
+────────────────────────────────────────────────────────── -->
+<div id="tab-panels" class="tab-content">
+  <div class="page-header">
+    <div>
+      <div class="page-title">اللوحات 🗂️</div>
+      <div class="page-subtitle">إدارة لوحات فتح التذاكر</div>
+    </div>
+    <div class="page-actions">
+      <button class="btn btn-primary" onclick="openModal('modal-panel-create')">
+        ＋ إنشاء لوحة
+      </button>
+    </div>
+  </div>
+  <div class="page-body">
+
+    <% if (panels.length === 0) { %>
+      <div class="empty">
+        <div class="empty-icon">🗂️</div>
+        <div class="empty-text">لا توجد لوحات بعد</div>
+        <div class="empty-sub">أنشئ أول لوحة لبدء استقبال التذاكر</div>
+        <button class="btn btn-primary mt-16" onclick="openModal('modal-panel-create')">＋ إنشاء لوحة</button>
+      </div>
+    <% } else { %>
+      <div class="panels-grid" id="panels-grid">
+        <% panels.forEach(p => { %>
+        <div class="panel-card" id="panel-<%= p.id %>">
+          <div class="panel-color-bar" style="background:<%= p.embed_color || '#4f7ef7' %>"></div>
+          <div class="panel-name"><%= p.embed_title || p.name %></div>
+          <div class="panel-desc"><%= p.embed_description || p.description || '' %></div>
+          <div class="panel-meta">
+            <span>🏷️ <%= p.name %></span>
+            <% if (p.require_reason) { %><span>📝 يتطلب سبباً</span><% } %>
+            <% if (p.dm_on_close) { %><span>📩 DM عند الإغلاق</span><% } %>
+            <% if (p.mention_role) { %><span>🔔 ذكر الرتبة</span><% } %>
+          </div>
+          <div class="panel-actions">
+            <button class="btn btn-ghost btn-sm" onclick="openPanelEdit('<%= p.id %>')">✏️ تعديل</button>
+            <button class="btn btn-success btn-sm" onclick="openSendPanel('<%= p.id %>')">📤 إرسال</button>
+            <button class="btn btn-danger btn-sm" onclick="deletePanel('<%= p.id %>', '<%= p.name %>')">🗑️</button>
+          </div>
+        </div>
+        <% }) %>
+      </div>
+    <% } %>
+
+  </div>
+</div>
+
+<!-- ──────────────────────────────────────────────────────────
+     TAB: TICKETS
+────────────────────────────────────────────────────────── -->
+<div id="tab-tickets" class="tab-content">
+  <div class="page-header">
+    <div>
+      <div class="page-title">التذاكر 🎫</div>
+      <div class="page-subtitle">عرض وإدارة جميع تذاكر السيرفر</div>
+    </div>
+  </div>
+  <div class="page-body">
+
+    <div class="filter-bar">
+      <input type="text" class="search-input" id="ticket-search" placeholder="🔍 ابحث بالمستخدم أو رقم التذكرة..." oninput="filterTickets()">
+      <select id="ticket-status-filter" onchange="filterTickets()">
+        <option value="">كل الحالات</option>
+        <option value="open">🟢 مفتوحة</option>
+        <option value="claimed">✋ مستلمة</option>
+        <option value="closed">🔒 مغلقة</option>
+      </select>
+      <select id="ticket-panel-filter" onchange="filterTickets()">
+        <option value="">كل اللوحات</option>
+        <% panels.forEach(p => { %>
+          <option value="<%= p.name %>"><%= p.name %></option>
+        <% }) %>
+      </select>
+      <select id="ticket-priority-filter" onchange="filterTickets()">
+        <option value="">كل الأولويات</option>
+        <option value="urgent">🔴 عاجلة</option>
+        <option value="high">🟡 عالية</option>
+        <option value="normal">🔵 عادية</option>
+        <option value="low">🟢 منخفضة</option>
+      </select>
+    </div>
+
+    <div class="card">
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>المستخدم</th>
+              <th>اللوحة</th>
+              <th>فريق الدعم</th>
+              <th>الحالة</th>
+              <th>الأولوية</th>
+              <th>التقييم</th>
+              <th>التاريخ</th>
+              <th>إجراء</th>
+            </tr>
+          </thead>
+          <tbody id="tickets-tbody">
+            <% if (tickets.length === 0) { %>
+              <tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:40px">📭 لا توجد تذاكر</td></tr>
+            <% } else { %>
+              <% tickets.forEach(t => { %>
+              <tr class="ticket-row"
+                  data-user="<%= t.userTag.toLowerCase() %>"
+                  data-id="<%= t.id %>"
+                  data-status="<%= t.status %>"
+                  data-panel="<%= t.panelName %>"
+                  data-priority="<%= t.priority %>">
+                <td><span style="color:var(--accent);font-weight:700">#<%= t.id %></span></td>
+                <td>
+                  <code style="background:var(--bg3);padding:2px 6px;border-radius:4px;font-size:12px">
+                    <%= t.userTag %>
+                  </code>
+                </td>
+                <td style="font-size:13px"><%= t.panelName %></td>
+                <td style="font-size:12px;color:var(--text-muted)">
+                  <%= t.staffTag || '—' %>
+                </td>
+                <td>
+                  <% if(t.status==='open') { %><span class="badge badge-open">🟢 مفتوحة</span>
+                  <% } else if(t.status==='claimed') { %><span class="badge badge-claimed">✋ مستلمة</span>
+                  <% } else { %><span class="badge badge-closed">🔒 مغلقة</span><% } %>
+                </td>
+                <td>
+                  <% const pr={low:'🟢 منخفضة',normal:'🔵 عادية',high:'🟡 عالية',urgent:'🔴 عاجلة'}; %>
+                  <span class="badge badge-<%= t.priority %>"><%= pr[t.priority]||t.priority %></span>
+                </td>
+                <td>
+                  <% if (t.rating) { %>
+                    <span style="color:var(--warning)">
+                      <%= '⭐'.repeat(t.rating) %> <%= t.rating %>/5
+                    </span>
+                  <% } else { %>
+                    <span style="color:var(--text-dim)">—</span>
+                  <% } %>
+                </td>
+                <td style="color:var(--text-muted);font-size:12px;white-space:nowrap">
+                  <%= new Date(t.created_at).toLocaleDateString('ar-SA') %>
+                </td>
+                <td>
+                  <% if (t.status === 'closed') { %>
+                    <button class="btn btn-ghost btn-sm" onclick="viewTranscript(<%= t.id %>)">📄 النص</button>
+                  <% } %>
+                </td>
+              </tr>
+              <% }) %>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+      <div id="ticket-count" style="padding:12px 14px;font-size:12px;color:var(--text-muted);border-top:1px solid var(--border2)">
+        إجمالي: <strong><%= tickets.length %></strong> تذكرة
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ──────────────────────────────────────────────────────────
+     TAB: STAFF
+────────────────────────────────────────────────────────── -->
+<div id="tab-staff" class="tab-content">
+  <div class="page-header">
+    <div>
+      <div class="page-title">فريق الدعم 👥</div>
+      <div class="page-subtitle">إدارة أعضاء فريق الدعم وإحصائياتهم</div>
+    </div>
+    <div class="page-actions">
+      <button class="btn btn-primary" onclick="openModal('modal-add-staff')">＋ إضافة عضو</button>
+    </div>
+  </div>
+  <div class="page-body">
+
+    <% if (staff.length === 0) { %>
+      <div class="empty">
+        <div class="empty-icon">👥</div>
+        <div class="empty-text">لا يوجد أعضاء دعم بعد</div>
+        <div class="empty-sub">أضف أعضاء فريق الدعم لبدء العمل</div>
+        <button class="btn btn-primary mt-16" onclick="openModal('modal-add-staff')">＋ إضافة عضو</button>
+      </div>
+    <% } else { %>
+      <div class="staff-grid">
+        <% staff.forEach(s => { %>
+        <div class="staff-card">
+          <div class="staff-avatar">👤</div>
+          <div class="staff-info">
+            <div class="staff-tag">
+              <span class="available-dot <%= s.available ? '' : 'offline' %>"></span>
+              <code style="font-size:13px"><%= s.user_id %></code>
+            </div>
+            <div class="staff-stats">
+              <span>🎫 <%= s.tickets_closed %> مغلقة</span>
+              <span>⭐ <%= s.avg_rating || '—' %></span>
+              <span><%= s.available ? '🟢 متاح' : '🔴 غير متاح' %></span>
+            </div>
+          </div>
+          <button class="btn btn-danger btn-sm btn-icon"
+                  onclick="removeStaff('<%= s.user_id %>')"
+                  title="إزالة من الدعم">🗑️</button>
+        </div>
+        <% }) %>
+      </div>
+
+      <!-- Staff leaderboard table -->
+      <div class="card mt-24">
+        <div class="card-header">
+          <div class="card-title">🏆 لوحة المتصدرين</div>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>الترتيب</th>
+                <th>العضو</th>
+                <th>التذاكر المغلقة</th>
+                <th>متوسط التقييم</th>
+                <th>إجمالي التقييمات</th>
+                <th>الحالة</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% const sorted = [...staff].sort((a,b) => (b.tickets_closed||0)-(a.tickets_closed||0)); %>
+              <% sorted.forEach((s, i) => { %>
+              <tr>
+                <td>
+                  <% if(i===0) { %><span style="font-size:18px">🥇</span>
+                  <% } else if(i===1) { %><span style="font-size:18px">🥈</span>
+                  <% } else if(i===2) { %><span style="font-size:18px">🥉</span>
+                  <% } else { %><span style="color:var(--text-dim)">#<%= i+1 %></span><% } %>
+                </td>
+                <td><code style="background:var(--bg3);padding:2px 8px;border-radius:4px;font-size:12px"><%= s.user_id %></code></td>
+                <td><strong style="color:var(--accent)"><%= s.tickets_closed || 0 %></strong></td>
+                <td>
+                  <% if (s.avg_rating) { %>
+                    <span style="color:var(--warning)">⭐ <%= s.avg_rating %></span>
+                  <% } else { %>—<% } %>
+                </td>
+                <td style="color:var(--text-muted)"><%= s.total_ratings || 0 %></td>
+                <td>
+                  <% if (s.available) { %><span class="badge badge-open">🟢 متاح</span>
+                  <% } else { %><span class="badge badge-closed">🔴 غير متاح</span><% } %>
+                </td>
+              </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    <% } %>
+
+  </div>
+</div>
+
+<!-- ──────────────────────────────────────────────────────────
+     TAB: KEYWORDS
+────────────────────────────────────────────────────────── -->
+<div id="tab-keywords" class="tab-content">
+  <div class="page-header">
+    <div>
+      <div class="page-title">الردود التلقائية 💬</div>
+      <div class="page-subtitle">الردود التلقائية على الكلمات داخل التذاكر</div>
+    </div>
+    <div class="page-actions">
+      <button class="btn btn-primary" onclick="openModal('modal-add-keyword')">＋ إضافة رد</button>
+    </div>
+  </div>
+  <div class="page-body">
+
+    <% if (keywords.length === 0) { %>
+      <div class="empty">
+        <div class="empty-icon">💬</div>
+        <div class="empty-text">لا توجد ردود تلقائية</div>
+        <div class="empty-sub">أضف كلمات مفتاحية للرد التلقائي داخل التذاكر</div>
+        <button class="btn btn-primary mt-16" onclick="openModal('modal-add-keyword')">＋ إضافة رد</button>
+      </div>
+    <% } else { %>
+      <div class="card">
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>الكلمة المفتاحية</th>
+                <th>نوع المطابقة</th>
+                <th>اللوحة</th>
+                <th>مرات الاستخدام</th>
+                <th>الرد</th>
+                <th>إجراء</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% keywords.forEach(kw => { %>
+              <tr>
+                <td>
+                  <code style="background:var(--accent-bg);color:var(--accent);padding:3px 8px;border-radius:4px;font-size:13px">
+                    <%= kw.keyword %>
+                  </code>
+                </td>
+                <td>
+                  <% const mt={exact:'تطابق كامل',contains:'يحتوي على',starts_with:'يبدأ بـ'}; %>
+                  <span class="badge badge-claimed"><%= mt[kw.match_type] || kw.match_type %></span>
+                </td>
+                <td style="font-size:12px;color:var(--text-muted)">
+                  <% const kp = panels.find(p=>p.id===kw.panel_id); %>
+                  <%= kp ? kp.name : '🌐 الكل' %>
+                </td>
+                <td style="color:var(--text-muted)"><%= kw.hit_count || 0 %> مرة</td>
+                <td style="max-width:200px;font-size:13px" class="truncate" title="<%= kw.response %>">
+                  <%= kw.response %>
+                </td>
+                <td>
+                  <button class="btn btn-danger btn-sm"
+                          onclick="deleteKeyword('<%= kw.id %>')">🗑️ حذف</button>
+                </td>
+              </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    <% } %>
+
+  </div>
+</div>
+
+<!-- ──────────────────────────────────────────────────────────
+     TAB: BANS
+────────────────────────────────────────────────────────── -->
+<div id="tab-bans" class="tab-content">
+  <div class="page-header">
+    <div>
+      <div class="page-title">الحظر 🚫</div>
+      <div class="page-subtitle">إدارة المستخدمين المحظورين من فتح التذاكر</div>
+    </div>
+    <div class="page-actions">
+      <button class="btn btn-danger" onclick="openModal('modal-add-ban')">＋ حظر مستخدم</button>
+    </div>
+  </div>
+  <div class="page-body">
+
+    <% if (bans.length === 0) { %>
+      <div class="empty">
+        <div class="empty-icon">🚫</div>
+        <div class="empty-text">لا يوجد حظر نشط</div>
+        <div class="empty-sub">المستخدمون المحظورون سيظهرون هنا</div>
+      </div>
+    <% } else { %>
+      <div class="card">
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>المستخدم</th>
+                <th>السبب</th>
+                <th>تاريخ الحظر</th>
+                <th>ينتهي في</th>
+                <th>بواسطة</th>
+                <th>إجراء</th>
+              </tr>
+            </thead>
+            <tbody id="bans-tbody">
+              <% bans.forEach(b => { %>
+              <tr id="ban-<%= b.user_id %>">
+                <td><code style="background:var(--bg3);padding:2px 8px;border-radius:4px;font-size:12px"><%= b.user_id %></code></td>
+                <td style="max-width:200px;font-size:13px"><%= b.reason || '—' %></td>
+                <td style="font-size:12px;color:var(--text-muted)">
+                  <%= new Date(b.created_at).toLocaleDateString('ar-SA') %>
+                </td>
+                <td>
+                  <% if (b.expires_at) { %>
+                    <span style="color:var(--warning);font-size:12px">
+                      <%= new Date(b.expires_at).toLocaleDateString('ar-SA') %>
+                    </span>
+                  <% } else { %>
+                    <span class="badge badge-closed">دائم</span>
+                  <% } %>
+                </td>
+                <td style="font-size:12px;color:var(--text-muted)"><code><%= b.banned_by %></code></td>
+                <td>
+                  <button class="btn btn-success btn-sm" onclick="unbanUser('<%= b.user_id %>')">
+                    ✅ رفع الحظر
+                  </button>
+                </td>
+              </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    <% } %>
+
+  </div>
+</div>
+
+<!-- ──────────────────────────────────────────────────────────
+     TAB: SETTINGS
+────────────────────────────────────────────────────────── -->
+<div id="tab-settings" class="tab-content">
+  <div class="page-header">
+    <div>
+      <div class="page-title">الإعدادات ⚙️</div>
+      <div class="page-subtitle">إعدادات نظام التذاكر للسيرفر</div>
+    </div>
+  </div>
+  <div class="page-body">
+
+    <div style="max-width:700px">
+
+      <!-- General Settings -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">⚙️ إعدادات عامة</div>
+        </div>
+        <div class="form-grid">
+
+          <div class="form-grid form-grid-2">
+            <div class="form-group">
+              <label>أقصى تذاكر مفتوحة للمستخدم</label>
+              <input type="number" id="s-max-tickets" min="1" max="10"
+                     value="<%= guildData.max_tickets_per_user || 1 %>">
+            </div>
+            <div class="form-group">
+              <label>بادئة اسم التذكرة</label>
+              <input type="text" id="s-ticket-prefix"
+                     value="<%= guildData.ticket_prefix || 'ticket' %>"
+                     placeholder="ticket">
+            </div>
+          </div>
+
+          <div class="form-grid form-grid-2">
+            <div class="form-group">
+              <label>ساعات الإغلاق التلقائي</label>
+              <input type="number" id="s-auto-close" min="1"
+                     value="<%= guildData.auto_close_hours || 72 %>">
+            </div>
+            <div class="form-group">
+              <label>ساعات التحذير قبل الإغلاق</label>
+              <input type="number" id="s-warn-hours" min="1"
+                     value="<%= guildData.auto_close_warn_hours || 48 %>">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>قناة السجلات (معرف القناة)</label>
+            <input type="text" id="s-log-channel"
+                   value="<%= guildData.log_channel_id || '' %>"
+                   placeholder="مثال: 123456789012345678">
+          </div>
+
+        </div>
+      </div>
+
+      <div class="mt-16"></div>
+
+      <!-- Toggle Settings -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">🔘 خيارات إضافية</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+
+          <div class="toggle-group">
+            <div>
+              <div class="toggle-label">📩 إرسال نسخة النص للمستخدم عند الإغلاق</div>
+              <div class="toggle-desc">يُرسل للمستخدم رسالة خاصة مع محتوى التذكرة</div>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="s-dm-transcript" <%= (guildData.dm_transcript) ? 'checked' : '' %>>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="toggle-group">
+            <div>
+              <div class="toggle-label">🔔 ذكر الرتبة عند فتح التذكرة</div>
+              <div class="toggle-desc">يُذكر دور فريق الدعم عند إنشاء تذكرة جديدة</div>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="s-ping-on-open" <%= (guildData.ping_on_open !== false) ? 'checked' : '' %>>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="toggle-group">
+            <div>
+              <div class="toggle-label">📝 طلب سبب إغلاق التذكرة</div>
+              <div class="toggle-desc">يُطلب من فريق الدعم ذكر سبب الإغلاق</div>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="s-require-close" <%= (guildData.require_close_reason) ? 'checked' : '' %>>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="mt-16"></div>
+      <button class="btn btn-primary" onclick="saveSettings()">💾 حفظ الإعدادات</button>
+
+    </div>
+  </div>
+</div>
+
+<!-- ──────────────────────────────────────────────────────────
+     TAB: LOGS
+────────────────────────────────────────────────────────── -->
+<div id="tab-logs" class="tab-content">
+  <div class="page-header">
+    <div>
+      <div class="page-title">السجلات 📋</div>
+      <div class="page-subtitle">سجل أحداث نظام التذاكر</div>
+    </div>
+  </div>
+  <div class="page-body">
+
+    <% if (logs.length === 0) { %>
+      <div class="empty">
+        <div class="empty-icon">📋</div>
+        <div class="empty-text">لا توجد سجلات بعد</div>
+      </div>
+    <% } else { %>
+      <div class="card">
+        <div class="log-feed">
+          <% const logIcons = {
+            TICKET_OPEN:  {icon:'🎫', label:'فتح تذكرة',      color:'var(--success)'},
+            TICKET_CLOSE: {icon:'🔒', label:'إغلاق تذكرة',     color:'var(--text-muted)'},
+            TICKET_CLAIM: {icon:'✋', label:'استلام تذكرة',    color:'var(--accent)'},
+            AUTO_CLOSE:   {icon:'⏱️', label:'إغلاق تلقائي',   color:'var(--warning)'},
+            PANEL_CREATE: {icon:'🗂️', label:'إنشاء لوحة',      color:'var(--accent)'},
+            PANEL_EDIT:   {icon:'✏️', label:'تعديل لوحة',      color:'var(--accent)'},
+            PANEL_DELETE: {icon:'🗑️', label:'حذف لوحة',        color:'var(--danger)'},
+            STAFF_ADD:    {icon:'👤', label:'إضافة دعم',        color:'var(--success)'},
+            STAFF_REMOVE: {icon:'👤', label:'إزالة دعم',        color:'var(--danger)'},
+            BAN:          {icon:'🚫', label:'حظر مستخدم',       color:'var(--danger)'},
+            UNBAN:        {icon:'✅', label:'رفع حظر',           color:'var(--success)'},
+            SETTINGS_UPDATE:{icon:'⚙️',label:'تحديث الإعدادات', color:'var(--purple)'}
+          }; %>
+
+          <% logs.forEach(log => { %>
+            <% const meta = logIcons[log.action] || {icon:'📌', label:log.action, color:'var(--text-muted)'}; %>
+            <div class="log-item">
+              <div class="log-icon" style="color:<%= meta.color %>"><%= meta.icon %></div>
+              <div class="log-body">
+                <div class="log-action" style="color:<%= meta.color %>"><%= meta.label %></div>
+                <div class="log-details">
+                  <% if (log.actor_id) { %><code style="font-size:11px"><%= log.actor_id %></code><% } %>
+                  <% if (log.target_id) { %> → <code style="font-size:11px"><%= log.target_id %></code><% } %>
+                </div>
+              </div>
+              <div class="log-time"><%= new Date(log.created_at).toLocaleString('ar-SA') %></div>
+            </div>
+          <% }) %>
+
+        </div>
+      </div>
+    <% } %>
+
+  </div>
+</div>
+
+</main><!-- end .main -->
+</div><!-- end .layout -->
+
+<!-- ══════════════════════════════════════════════════════════
+     TOAST CONTAINER
+═══════════════════════════════════════════════════════════ -->
+<div id="toast-container"></div>
+
+<!-- ══════════════════════════════════════════════════════════
+     MODAL: CREATE PANEL
+═══════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-panel-create">
+  <div class="modal" style="max-width:680px">
+    <div class="modal-header">
+      <div class="modal-title">🗂️ إنشاء لوحة جديدة</div>
+      <button class="modal-close" onclick="closeModal('modal-panel-create')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+
+        <div class="form-grid form-grid-2">
+          <div class="form-group">
+            <label>اسم اللوحة (داخلي)</label>
+            <input type="text" id="p-name" placeholder="مثال: دعم فني">
+          </div>
+          <div class="form-group">
+            <label>لون الـ Embed</label>
+            <input type="color" id="p-color" value="#4f7ef7" oninput="updatePreview()">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>عنوان الـ Embed</label>
+          <input type="text" id="p-embed-title" placeholder="🎫 فتح تذكرة" oninput="updatePreview()">
+        </div>
+
+        <div class="form-group">
+          <label>وصف الـ Embed</label>
+          <textarea id="p-embed-desc" rows="3" placeholder="اضغط على الزر أدناه لفتح تذكرة..." oninput="updatePreview()"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label>ذيل الـ Embed (اختياري)</label>
+          <input type="text" id="p-embed-footer" placeholder="SkyTicket Pro • اسم السيرفر" oninput="updatePreview()">
+        </div>
+
+        <!-- Live Preview -->
+        <div>
+          <label>معاينة مباشرة</label>
+          <div class="embed-preview" id="embed-preview">
+            <div class="embed-preview-title">🎫 فتح تذكرة</div>
+            <div class="embed-preview-desc">اضغط على الزر أدناه لفتح تذكرة...</div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="form-grid form-grid-2">
+          <div class="form-group">
+            <label>رسالة الترحيب</label>
+            <textarea id="p-welcome" rows="2" placeholder="مرحباً {user}! سيتم مساعدتك قريباً.">مرحباً {user}! سيتم مساعدتك قريباً.</textarea>
+          </div>
+          <div class="form-group">
+            <label>رسالة الإغلاق</label>
+            <textarea id="p-close-msg" rows="2" placeholder="تم إغلاق التذكرة. شكراً لتواصلك!">تم إغلاق التذكرة. شكراً لتواصلك!</textarea>
+          </div>
+        </div>
+
+        <div class="form-grid form-grid-2">
+          <div class="form-group">
+            <label>نص الزر</label>
+            <input type="text" id="p-btn-label" placeholder="🎫 فتح تذكرة" value="🎫 فتح تذكرة">
+          </div>
+          <div class="form-group">
+            <label>لون الزر</label>
+            <select id="p-btn-style">
+              <option value="PRIMARY">🔵 أزرق (Primary)</option>
+              <option value="SUCCESS">🟢 أخضر (Success)</option>
+              <option value="DANGER">🔴 أحمر (Danger)</option>
+              <option value="SECONDARY">⚫ رمادي (Secondary)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-grid form-grid-2">
+          <div class="form-group">
+            <label>تصنيف التذاكر المفتوحة (معرف)</label>
+            <input type="text" id="p-cat-open" placeholder="معرف الكاتيقوري">
+          </div>
+          <div class="form-group">
+            <label>تصنيف التذاكر المغلقة (معرف)</label>
+            <input type="text" id="p-cat-close" placeholder="معرف الكاتيقوري">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>رتبة الإشعار (معرف)</label>
+          <input type="text" id="p-mention-role" placeholder="معرف الرتبة (اختياري)">
+        </div>
+
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0;font-size:13px;font-weight:500;cursor:pointer">
+            <input type="checkbox" id="p-require-reason"> يتطلب ذكر سبب عند الفتح
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0;font-size:13px;font-weight:500;cursor:pointer">
+            <input type="checkbox" id="p-dm-on-close" checked> إرسال نسخة النص للمستخدم
+          </label>
+        </div>
+
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="createPanel()">✅ إنشاء اللوحة</button>
+      <button class="btn btn-ghost" onclick="closeModal('modal-panel-create')">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     MODAL: EDIT PANEL
+═══════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-panel-edit">
+  <div class="modal" style="max-width:680px">
+    <div class="modal-header">
+      <div class="modal-title">✏️ تعديل اللوحة</div>
+      <button class="modal-close" onclick="closeModal('modal-panel-edit')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-panel-id">
+      <div class="form-grid">
+        <div class="form-grid form-grid-2">
+          <div class="form-group">
+            <label>اسم اللوحة</label>
+            <input type="text" id="edit-p-name">
+          </div>
+          <div class="form-group">
+            <label>لون الـ Embed</label>
+            <input type="color" id="edit-p-color" oninput="updateEditPreview()">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>عنوان الـ Embed</label>
+          <input type="text" id="edit-p-embed-title" oninput="updateEditPreview()">
+        </div>
+        <div class="form-group">
+          <label>وصف الـ Embed</label>
+          <textarea id="edit-p-embed-desc" rows="3" oninput="updateEditPreview()"></textarea>
+        </div>
+        <div class="form-group">
+          <label>ذيل الـ Embed</label>
+          <input type="text" id="edit-p-embed-footer">
+        </div>
+        <div>
+          <label>معاينة</label>
+          <div class="embed-preview" id="edit-embed-preview">
+            <div class="embed-preview-title"></div>
+            <div class="embed-preview-desc"></div>
+          </div>
+        </div>
+        <div class="divider"></div>
+        <div class="form-grid form-grid-2">
+          <div class="form-group">
+            <label>رسالة الترحيب</label>
+            <textarea id="edit-p-welcome" rows="2"></textarea>
+          </div>
+          <div class="form-group">
+            <label>رسالة الإغلاق</label>
+            <textarea id="edit-p-close-msg" rows="2"></textarea>
+          </div>
+        </div>
+        <div class="form-grid form-grid-2">
+          <div class="form-group">
+            <label>تصنيف المفتوحة</label>
+            <input type="text" id="edit-p-cat-open">
+          </div>
+          <div class="form-group">
+            <label>تصنيف المغلقة</label>
+            <input type="text" id="edit-p-cat-close">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>رتبة الإشعار</label>
+          <input type="text" id="edit-p-mention-role">
+        </div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0;font-size:13px;font-weight:500;cursor:pointer">
+            <input type="checkbox" id="edit-p-require-reason"> يتطلب سبباً
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0;font-size:13px;font-weight:500;cursor:pointer">
+            <input type="checkbox" id="edit-p-dm-on-close"> DM عند الإغلاق
+          </label>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="savePanel()">💾 حفظ التغييرات</button>
+      <button class="btn btn-ghost" onclick="closeModal('modal-panel-edit')">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     MODAL: SEND PANEL
+═══════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-send-panel">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <div class="modal-title">📤 إرسال اللوحة</div>
+      <button class="modal-close" onclick="closeModal('modal-send-panel')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="send-panel-id">
+      <div class="form-group">
+        <label>معرف القناة</label>
+        <input type="text" id="send-channel-id" placeholder="مثال: 123456789012345678">
+        <p style="font-size:11px;color:var(--text-dim);margin-top:4px">
+          انقر بزر اليمين على القناة → نسخ المعرف
+        </p>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="sendPanel()">📤 إرسال</button>
+      <button class="btn btn-ghost" onclick="closeModal('modal-send-panel')">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     MODAL: ADD STAFF
+═══════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-add-staff">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <div class="modal-title">👤 إضافة عضو دعم</div>
+      <button class="modal-close" onclick="closeModal('modal-add-staff')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>معرف المستخدم (User ID)</label>
+        <input type="text" id="staff-user-id" placeholder="مثال: 123456789012345678">
+        <p style="font-size:11px;color:var(--text-dim);margin-top:4px">
+          انقر بزر اليمين على المستخدم → نسخ المعرف
+        </p>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="addStaff()">✅ إضافة</button>
+      <button class="btn btn-ghost" onclick="closeModal('modal-add-staff')">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     MODAL: ADD KEYWORD
+═══════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-add-keyword">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <div class="modal-title">💬 إضافة رد تلقائي</div>
+      <button class="modal-close" onclick="closeModal('modal-add-keyword')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>الكلمة المفتاحية</label>
+          <input type="text" id="kw-keyword" placeholder="مثال: سعر">
+        </div>
+        <div class="form-group">
+          <label>الرد التلقائي</label>
+          <textarea id="kw-response" rows="3" placeholder="يمكنك الاطلاع على الأسعار في..."></textarea>
+        </div>
+        <div class="form-grid form-grid-2">
+          <div class="form-group">
+            <label>نوع المطابقة</label>
+            <select id="kw-match-type">
+              <option value="contains">يحتوي على</option>
+              <option value="exact">تطابق كامل</option>
+              <option value="starts_with">يبدأ بـ</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>تخصيص للوحة (اختياري)</label>
+            <select id="kw-panel-id">
+              <option value="">🌐 كل اللوحات</option>
+              <% panels.forEach(p => { %>
+                <option value="<%= p.id %>"><%= p.name %></option>
+              <% }) %>
+            </select>
+          </div>
+        </div>
+        <label style="display:flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0;font-size:13px;font-weight:500;cursor:pointer">
+          <input type="checkbox" id="kw-case-sensitive"> حساس لحالة الأحرف
+        </label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="addKeyword()">✅ إضافة</button>
+      <button class="btn btn-ghost" onclick="closeModal('modal-add-keyword')">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     MODAL: ADD BAN
+═══════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-add-ban">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header">
+      <div class="modal-title">🚫 حظر مستخدم</div>
+      <button class="modal-close" onclick="closeModal('modal-add-ban')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>معرف المستخدم</label>
+          <input type="text" id="ban-user-id" placeholder="مثال: 123456789012345678">
+        </div>
+        <div class="form-group">
+          <label>سبب الحظر</label>
+          <input type="text" id="ban-reason" placeholder="مثال: سبام">
+        </div>
+        <div class="form-group">
+          <label>مدة الحظر</label>
+          <select id="ban-duration">
+            <option value="permanent">دائم ♾️</option>
+            <option value="1">يوم واحد</option>
+            <option value="3">3 أيام</option>
+            <option value="7">أسبوع</option>
+            <option value="30">شهر</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger" onclick="banUser()">🚫 حظر</button>
+      <button class="btn btn-ghost" onclick="closeModal('modal-add-ban')">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     MODAL: TRANSCRIPT VIEWER
+═══════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-transcript">
+  <div class="modal" style="max-width:800px;height:80vh">
+    <div class="modal-header">
+      <div class="modal-title">📄 نص التذكرة</div>
+      <button class="modal-close" onclick="closeModal('modal-transcript')">✕</button>
+    </div>
+    <div class="modal-body" style="padding:0">
+      <iframe id="transcript-frame" style="width:100%;height:100%;border:none;background:#fff;border-radius:0 0 var(--radius) var(--radius)"></iframe>
+      <div id="transcript-loading" style="padding:60px;text-align:center;color:var(--text-muted)">
+        ⏳ جارٍ تحميل النص...
+      </div>
+      <div id="transcript-empty" style="display:none;padding:60px;text-align:center;color:var(--text-muted)">
+        📭 لا يوجد نص محفوظ لهذه التذكرة
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     JAVASCRIPT
+═══════════════════════════════════════════════════════════ -->
+<script>
+// ─── Tab Navigation ──────────────────────────────────────────
+function showTab(name) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const tab = document.getElementById('tab-' + name);
+  if (tab) tab.classList.add('active');
+  const nav = document.querySelector(`[data-tab="${name}"]`);
+  if (nav) nav.classList.add('active');
+}
+
+document.querySelectorAll('.nav-item[data-tab]').forEach(item => {
+  item.addEventListener('click', () => showTab(item.dataset.tab));
+});
+
+// ─── Modals ───────────────────────────────────────────────────
+function openModal(id) {
+  document.getElementById(id).classList.add('open');
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+// Close on overlay click
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay) overlay.classList.remove('open');
+  });
+});
+
+// ─── Toast Notifications ─────────────────────────────────────
+function toast(message, type = 'info') {
+  const icons = { success: '✅', error: '❌', info: 'ℹ️' };
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `<span class="toast-icon">${icons[type]}</span><span>${message}</span>`;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => {
+    el.classList.add('toast-exit');
+    setTimeout(() => el.remove(), 300);
+  }, 3500);
+}
+
+// ─── API Helper ───────────────────────────────────────────────
+async function api(method, url, data) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (data) opts.body = JSON.stringify(data);
+  const res = await fetch(url, opts);
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'خطأ في الخادم');
+  return json;
+}
+
+// ─── Counter Animation ────────────────────────────────────────
+function animateCounters() {
+  document.querySelectorAll('.counter').forEach(el => {
+    const target = parseInt(el.dataset.target) || 0;
+    let current = 0;
+    const step = Math.max(1, Math.ceil(target / 40));
+    const timer = setInterval(() => {
+      current = Math.min(current + step, target);
+      el.textContent = current.toLocaleString('ar');
+      if (current >= target) clearInterval(timer);
+    }, 30);
+  });
+}
+
+// ─── Charts ───────────────────────────────────────────────────
+function initCharts() {
+  const daily = STATS.daily || {};
+  const labels = Object.keys(daily).map(d => {
+    const dt = new Date(d);
+    return dt.toLocaleDateString('ar-SA', { month: 'short', day: 'numeric' });
+  });
+  const values = Object.values(daily);
+
+  const ctx = document.getElementById('chartDaily');
+  if (!ctx) return;
+
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'التذاكر',
+        data: values,
+        backgroundColor: 'rgba(79, 126, 247, 0.4)',
+        borderColor: '#4f7ef7',
+        borderWidth: 2,
+        borderRadius: 6,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => `${ctx.parsed.y} تذكرة`
+          }
+        }
+      },
+      scales: {
+        x: { grid: { color: 'rgba(79,126,247,0.05)' }, ticks: { color: '#7a93bb', font: { family: 'Plus Jakarta Sans' } } },
+        y: { grid: { color: 'rgba(79,126,247,0.05)' }, ticks: { color: '#7a93bb', font: { family: 'Plus Jakarta Sans' }, stepSize: 1 }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+function initLeaderboard() {
+  const el = document.getElementById('staffLeaderboard');
+  if (!el) return;
+
+  const sorted = [...STAFF].sort((a, b) => (b.tickets_closed || 0) - (a.tickets_closed || 0)).slice(0, 5);
+
+  if (!sorted.length) {
+    el.innerHTML = '<div style="color:var(--text-dim);font-size:13px;padding:20px 0;text-align:center">لا يوجد أعضاء دعم بعد</div>';
+    return;
+  }
+
+  const max = sorted[0]?.tickets_closed || 1;
+  el.innerHTML = sorted.map((s, i) => {
+    const pct = Math.max(4, Math.round(((s.tickets_closed || 0) / max) * 100));
+    const medals = ['🥇','🥈','🥉','4️⃣','5️⃣'];
+    return `
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:16px;width:24px;text-align:center">${medals[i]}</span>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+            <span style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.user_id}</span>
+            <span style="font-size:11px;color:var(--accent);font-weight:700">${s.tickets_closed || 0}</span>
+          </div>
+          <div style="height:4px;background:var(--bg4);border-radius:2px;overflow:hidden">
+            <div style="height:100%;width:${pct}%;background:var(--accent);border-radius:2px;transition:width 0.8s ease"></div>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ─── Ticket Filters ───────────────────────────────────────────
+function filterTickets() {
+  const search   = document.getElementById('ticket-search')?.value.toLowerCase() || '';
+  const status   = document.getElementById('ticket-status-filter')?.value || '';
+  const panel    = document.getElementById('ticket-panel-filter')?.value || '';
+  const priority = document.getElementById('ticket-priority-filter')?.value || '';
+
+  let visible = 0;
+  document.querySelectorAll('.ticket-row').forEach(row => {
+    const matchSearch   = !search   || row.dataset.user.includes(search) || row.dataset.id.includes(search);
+    const matchStatus   = !status   || row.dataset.status   === status;
+    const matchPanel    = !panel    || row.dataset.panel     === panel;
+    const matchPriority = !priority || row.dataset.priority  === priority;
+    const show = matchSearch && matchStatus && matchPanel && matchPriority;
+    row.style.display = show ? '' : 'none';
+    if (show) visible++;
+  });
+
+  const countEl = document.getElementById('ticket-count');
+  if (countEl) countEl.innerHTML = `إجمالي: <strong>${visible}</strong> تذكرة`;
+}
+
+// ─── PANEL PREVIEW ────────────────────────────────────────────
+function updatePreview() {
+  const title   = document.getElementById('p-embed-title')?.value  || '🎫 فتح تذكرة';
+  const desc    = document.getElementById('p-embed-desc')?.value   || '';
+  const footer  = document.getElementById('p-embed-footer')?.value || '';
+  const color   = document.getElementById('p-color')?.value       || '#4f7ef7';
+  const preview = document.getElementById('embed-preview');
+  if (!preview) return;
+  preview.style.borderColor = color;
+  preview.querySelector('.embed-preview-title').textContent = title;
+  preview.querySelector('.embed-preview-desc').textContent  = desc;
+  let footerEl = preview.querySelector('.embed-preview-footer');
+  if (footer) {
+    if (!footerEl) { footerEl = document.createElement('div'); footerEl.className = 'embed-preview-footer'; preview.appendChild(footerEl); }
+    footerEl.textContent = footer;
+  } else if (footerEl) footerEl.remove();
+}
+
+function updateEditPreview() {
+  const title  = document.getElementById('edit-p-embed-title')?.value || '';
+  const desc   = document.getElementById('edit-p-embed-desc')?.value  || '';
+  const color  = document.getElementById('edit-p-color')?.value       || '#4f7ef7';
+  const preview = document.getElementById('edit-embed-preview');
+  if (!preview) return;
+  preview.style.borderColor = color;
+  preview.querySelector('.embed-preview-title').textContent = title;
+  preview.querySelector('.embed-preview-desc').textContent  = desc;
+}
+
+// ─── PANEL CRUD ───────────────────────────────────────────────
+async function createPanel() {
+  const name = document.getElementById('p-name')?.value?.trim();
+  if (!name) return toast('أدخل اسم اللوحة', 'error');
+
+  try {
+    await api('POST', '/api/panel', {
+      guild_id:         GUILD_ID,
+      name,
+      embed_title:      document.getElementById('p-embed-title')?.value   || '🎫 فتح تذكرة',
+      embed_description:document.getElementById('p-embed-desc')?.value    || '',
+      embed_color:      document.getElementById('p-color')?.value         || '#4f7ef7',
+      embed_footer:     document.getElementById('p-embed-footer')?.value  || '',
+      welcome_message:  document.getElementById('p-welcome')?.value       || 'مرحباً {user}!',
+      close_message:    document.getElementById('p-close-msg')?.value     || 'شكراً لتواصلك!',
+      button_label:     document.getElementById('p-btn-label')?.value     || '🎫 فتح تذكرة',
+      button_style:     document.getElementById('p-btn-style')?.value     || 'PRIMARY',
+      category_open:    document.getElementById('p-cat-open')?.value      || '',
+      category_close:   document.getElementById('p-cat-close')?.value     || '',
+      mention_role:     document.getElementById('p-mention-role')?.value  || '',
+      require_reason:   document.getElementById('p-require-reason')?.checked ? 'true' : 'false',
+      dm_on_close:      document.getElementById('p-dm-on-close')?.checked ? 'true' : 'false',
+    });
+    toast('تم إنشاء اللوحة بنجاح! ✅', 'success');
+    closeModal('modal-panel-create');
+    setTimeout(() => location.reload(), 800);
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+function openPanelEdit(panelId) {
+  const panel = PANELS.find(p => p.id === panelId);
+  if (!panel) return toast('اللوحة غير موجودة', 'error');
+
+  document.getElementById('edit-panel-id').value       = panel.id;
+  document.getElementById('edit-p-name').value         = panel.name || '';
+  document.getElementById('edit-p-color').value        = panel.embed_color || '#4f7ef7';
+  document.getElementById('edit-p-embed-title').value  = panel.embed_title || '';
+  document.getElementById('edit-p-embed-desc').value   = panel.embed_description || '';
+  document.getElementById('edit-p-embed-footer').value = panel.embed_footer || '';
+  document.getElementById('edit-p-welcome').value      = panel.welcome_message || '';
+  document.getElementById('edit-p-close-msg').value    = panel.close_message || '';
+  document.getElementById('edit-p-cat-open').value     = panel.category_open || '';
+  document.getElementById('edit-p-cat-close').value    = panel.category_close || '';
+  document.getElementById('edit-p-mention-role').value = panel.mention_role || '';
+  document.getElementById('edit-p-require-reason').checked = !!panel.require_reason;
+  document.getElementById('edit-p-dm-on-close').checked    = !!panel.dm_on_close;
+  updateEditPreview();
+  openModal('modal-panel-edit');
+}
+
+async function savePanel() {
+  const panelId = document.getElementById('edit-panel-id')?.value;
+  if (!panelId) return;
+  try {
+    await api('PUT', `/api/panel/${panelId}`, {
+      name:              document.getElementById('edit-p-name')?.value,
+      embed_title:       document.getElementById('edit-p-embed-title')?.value,
+      embed_description: document.getElementById('edit-p-embed-desc')?.value,
+      embed_color:       document.getElementById('edit-p-color')?.value,
+      embed_footer:      document.getElementById('edit-p-embed-footer')?.value,
+      welcome_message:   document.getElementById('edit-p-welcome')?.value,
+      close_message:     document.getElementById('edit-p-close-msg')?.value,
+      category_open:     document.getElementById('edit-p-cat-open')?.value,
+      category_close:    document.getElementById('edit-p-cat-close')?.value,
+      mention_role:      document.getElementById('edit-p-mention-role')?.value,
+      require_reason:    document.getElementById('edit-p-require-reason')?.checked,
+      dm_on_close:       document.getElementById('edit-p-dm-on-close')?.checked,
+    });
+    toast('تم حفظ التغييرات ✅', 'success');
+    closeModal('modal-panel-edit');
+    setTimeout(() => location.reload(), 800);
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+async function deletePanel(panelId, name) {
+  if (!confirm(`هل أنت متأكد من حذف لوحة "${name}"؟`)) return;
+  try {
+    await api('DELETE', `/api/panel/${panelId}`);
+    document.getElementById(`panel-${panelId}`)?.remove();
+    toast(`تم حذف لوحة "${name}" ✅`, 'success');
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+function openSendPanel(panelId) {
+  document.getElementById('send-panel-id').value = panelId;
+  document.getElementById('send-channel-id').value = '';
+  openModal('modal-send-panel');
+}
+
+async function sendPanel() {
+  const panelId   = document.getElementById('send-panel-id')?.value;
+  const channelId = document.getElementById('send-channel-id')?.value?.trim();
+  if (!channelId) return toast('أدخل معرف القناة', 'error');
+  try {
+    await api('POST', `/api/panel/${panelId}/send`, { channel_id: channelId });
+    toast('تم إرسال اللوحة في القناة ✅', 'success');
+    closeModal('modal-send-panel');
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+// ─── STAFF CRUD ───────────────────────────────────────────────
+async function addStaff() {
+  const userId = document.getElementById('staff-user-id')?.value?.trim();
+  if (!userId) return toast('أدخل معرف المستخدم', 'error');
+  try {
+    await api('POST', '/api/staff', { guild_id: GUILD_ID, user_id: userId });
+    toast('تمت إضافة عضو الدعم ✅', 'success');
+    closeModal('modal-add-staff');
+    setTimeout(() => location.reload(), 800);
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+async function removeStaff(userId) {
+  if (!confirm(`هل أنت متأكد من إزالة ${userId} من فريق الدعم؟`)) return;
+  try {
+    await api('DELETE', `/api/staff/${userId}/${GUILD_ID}`);
+    document.querySelectorAll('.staff-card').forEach(card => {
+      if (card.innerHTML.includes(userId)) card.remove();
+    });
+    toast('تمت إزالة عضو الدعم ✅', 'success');
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+// ─── KEYWORDS CRUD ────────────────────────────────────────────
+async function addKeyword() {
+  const keyword  = document.getElementById('kw-keyword')?.value?.trim();
+  const response = document.getElementById('kw-response')?.value?.trim();
+  if (!keyword || !response) return toast('أدخل الكلمة والرد', 'error');
+  try {
+    await api('POST', '/api/keyword', {
+      guild_id:       GUILD_ID,
+      panel_id:       document.getElementById('kw-panel-id')?.value || null,
+      keyword,
+      response,
+      match_type:     document.getElementById('kw-match-type')?.value     || 'contains',
+      case_sensitive: document.getElementById('kw-case-sensitive')?.checked ? 'true' : 'false',
+    });
+    toast('تمت إضافة الرد التلقائي ✅', 'success');
+    closeModal('modal-add-keyword');
+    setTimeout(() => location.reload(), 800);
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+async function deleteKeyword(id) {
+  if (!confirm('حذف هذا الرد التلقائي؟')) return;
+  try {
+    await api('DELETE', `/api/keyword/${id}?guild_id=${GUILD_ID}`);
+    toast('تم حذف الرد التلقائي ✅', 'success');
+    setTimeout(() => location.reload(), 600);
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+// ─── BAN / UNBAN ─────────────────────────────────────────────
+async function banUser() {
+  const userId   = document.getElementById('ban-user-id')?.value?.trim();
+  const reason   = document.getElementById('ban-reason')?.value?.trim();
+  const duration = document.getElementById('ban-duration')?.value;
+  if (!userId || !reason) return toast('أدخل المعرف والسبب', 'error');
+  try {
+    await api('POST', '/api/ban', { guild_id: GUILD_ID, user_id: userId, reason, duration });
+    toast(`تم حظر ${userId} بنجاح 🚫`, 'success');
+    closeModal('modal-add-ban');
+    setTimeout(() => location.reload(), 800);
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+async function unbanUser(userId) {
+  if (!confirm(`رفع الحظر عن ${userId}؟`)) return;
+  try {
+    await api('DELETE', `/api/ban/${GUILD_ID}/${userId}`);
+    document.getElementById(`ban-${userId}`)?.remove();
+    toast(`تم رفع الحظر عن ${userId} ✅`, 'success');
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+// ─── SETTINGS ─────────────────────────────────────────────────
+async function saveSettings() {
+  try {
+    await api('POST', `/api/guild/${GUILD_ID}/settings`, {
+      max_tickets_per_user: document.getElementById('s-max-tickets')?.value,
+      ticket_prefix:        document.getElementById('s-ticket-prefix')?.value,
+      auto_close_hours:     document.getElementById('s-auto-close')?.value,
+      auto_close_warn_hours:document.getElementById('s-warn-hours')?.value,
+      log_channel_id:       document.getElementById('s-log-channel')?.value,
+      dm_transcript:        document.getElementById('s-dm-transcript')?.checked,
+      ping_on_open:         document.getElementById('s-ping-on-open')?.checked,
+      require_close_reason: document.getElementById('s-require-close')?.checked,
+    });
+    toast('تم حفظ الإعدادات ✅', 'success');
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+// ─── TRANSCRIPT ───────────────────────────────────────────────
+async function viewTranscript(ticketId) {
+  openModal('modal-transcript');
+  const frame   = document.getElementById('transcript-frame');
+  const loading = document.getElementById('transcript-loading');
+  const empty   = document.getElementById('transcript-empty');
+  frame.style.display   = 'none';
+  loading.style.display = 'block';
+  empty.style.display   = 'none';
+
+  try {
+    const data = await api('GET', `/api/transcript/${ticketId}`);
+    loading.style.display = 'none';
+    if (data.content) {
+      frame.style.display = 'block';
+      frame.srcdoc = data.content;
+    } else {
+      empty.style.display = 'block';
+    }
+  } catch (err) {
+    loading.style.display = 'none';
+    empty.style.display   = 'block';
+    toast(err.message, 'error');
+  }
+}
+
+// ─── STATS REFRESH ────────────────────────────────────────────
+async function refreshStats() {
+  try {
+    const stats = await api('GET', `/api/guild/${GUILD_ID}/stats`);
+    toast('تم تحديث الإحصائيات ✅', 'success');
+  } catch (err) { toast('تعذّر التحديث', 'error'); }
+}
+
+// ─── INIT ─────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  animateCounters();
+  initCharts();
+  initLeaderboard();
+  // Animate leaderboard bars
+  setTimeout(() => {
+    document.querySelectorAll('[style*="width:"]').forEach(el => {
+      const w = el.style.width; el.style.width = '0'; setTimeout(() => el.style.width = w, 50);
+    });
+  }, 100);
+});
+</script>
+
