@@ -1,5 +1,5 @@
 /* ════════════════════════════════════════════════════════════════
-   SkyTicket Crimson — Dashboard Styles
+   SkyTicket — Dashboard Styles
    Theme: Deep Space Dark + Sky Blue
    ════════════════════════════════════════════════════════════════ */
 
@@ -989,7 +989,7 @@ textarea { resize: vertical; min-height: 80px; }
 }
 
 
-/* ─── Crimson refinements ───────────────────────────────────── */
+/* ─── Theme refinements ───────────────────────────────────── */
 .brand-logo .icon img {
   width: 100%;
   height: 100%;
