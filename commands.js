@@ -190,7 +190,7 @@ async function handleCommand(interaction, client) {
         return interaction.reply({ content: '📭 لا توجد لوحات. استخدم `/panel create`', ephemeral: true });
 
       const embed = new EmbedBuilder()
-        .setColor('#4f7ef7')
+        .setColor('#dc2626')
         .setTitle('🗂️ لوحات التذاكر')
         .setDescription(panels.map(p => `**${p.name}** — \`${p.id}\``).join('\n'));
 
@@ -233,7 +233,7 @@ async function handleCommand(interaction, client) {
         return interaction.reply({ content: '📭 لا يوجد أعضاء دعم.', ephemeral: true });
 
       const embed = new EmbedBuilder()
-        .setColor('#4f7ef7')
+        .setColor('#dc2626')
         .setTitle('👥 فريق الدعم')
         .setDescription(staffList.map((s, i) =>
           `**${i + 1}.** <@${s.user_id}> • 🎫 ${s.tickets_closed} • ⭐ ${s.avg_rating || '—'} • ${s.available ? '🟢' : '🔴'}`
@@ -295,7 +295,7 @@ async function handleCommand(interaction, client) {
     await interaction.deferReply();
     const stats = await db.getGuildStats(interaction.guild.id);
     const embed = new EmbedBuilder()
-      .setColor('#4f7ef7')
+      .setColor('#dc2626')
       .setTitle('📊 إحصائيات SkyTicket')
       .setThumbnail(interaction.guild.iconURL())
       .addFields(
@@ -337,7 +337,7 @@ async function handleCommand(interaction, client) {
       const labels = { low: '🟢 منخفضة', normal: '🔵 عادية', high: '🟡 عالية', urgent: '🔴 عاجلة' };
       await db.setTicketPriority(interaction.channel.id, level);
 
-      const embed = new EmbedBuilder().setColor('#4f7ef7')
+      const embed = new EmbedBuilder().setColor('#dc2626')
         .setDescription(`📌 تم تغيير أولوية التذكرة إلى **${labels[level]}** بواسطة ${interaction.user}`);
       return interaction.reply({ embeds: [embed] });
     }
@@ -354,7 +354,7 @@ async function handleCommand(interaction, client) {
       await db.claimTicket(interaction.channel.id, newStaff.id);
       await interaction.channel.permissionOverwrites.create(newStaff, { ViewChannel: true, SendMessages: true });
 
-      const embed = new EmbedBuilder().setColor('#4f7ef7')
+      const embed = new EmbedBuilder().setColor('#dc2626')
         .setDescription(`🔄 تم نقل التذكرة من ${interaction.user} إلى ${newStaff}`);
       return interaction.reply({ embeds: [embed] });
     }
@@ -384,22 +384,25 @@ async function sendPanelEmbed(channel, panel, guild) {
   const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
   const db = require('./database');
 
-  const styleMap = { PRIMARY: ButtonStyle.Primary, SECONDARY: ButtonStyle.Secondary, SUCCESS: ButtonStyle.Success, DANGER: ButtonStyle.Danger };
+  const styleMap = { DANGER: ButtonStyle.Danger, PRIMARY: ButtonStyle.Primary, SECONDARY: ButtonStyle.Secondary, SUCCESS: ButtonStyle.Success };
 
   const embed = new EmbedBuilder()
-    .setColor(panel.embed_color || '#4f7ef7')
-    .setTitle(panel.embed_title)
-    .setDescription(panel.embed_description);
+    .setColor(panel.embed_color || '#dc2626')
+    .setTitle(panel.embed_title || 'فتح تذكرة')
+    .setDescription(panel.embed_description || '');
 
   if (panel.embed_footer)    embed.setFooter({ text: panel.embed_footer });
   if (panel.embed_image)     embed.setImage(panel.embed_image);
   if (panel.embed_thumbnail) embed.setThumbnail(panel.embed_thumbnail);
 
+  const openEmoji = (panel.button_emoji || '').trim();
+  const openLabel = (panel.button_label || 'فتح تذكرة').trim();
+
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`open_ticket:${panel.id}`)
-      .setLabel(panel.button_label)
-      .setStyle(styleMap[panel.button_style] || ButtonStyle.Primary)
+      .setLabel(openEmoji ? `${openEmoji} ${openLabel}` : openLabel)
+      .setStyle(styleMap[panel.button_style] || ButtonStyle.Danger)
   );
 
   const msg = await channel.send({ embeds: [embed], components: [row] });

@@ -22,7 +22,7 @@ const client = new Client({
 // ─── Ready ───────────────────────────────────────────────────────────────────
 client.once(Events.ClientReady, async () => {
   console.log(`[Bot] Logged in as ${client.user.tag}`);
-  client.user.setActivity('🎫 SkyTicket Pro', { type: 3 }); // Watching
+  client.user.setActivity('🎫 SkyTicket Crimson', { type: 3 }); // Watching
 
   await registerCommands(client);
   await db.ensureGuild(process.env.GUILD_ID).catch(() => {});
@@ -96,7 +96,7 @@ async function dmTranscript(userId, ticket, content, guildName) {
   try {
     const user = await client.users.fetch(userId);
     const embed = new EmbedBuilder()
-      .setColor('#4f7ef7')
+      .setColor('#dc2626')
       .setTitle('📄 نسخة من تذكرتك')
       .setDescription(`تم إغلاق تذكرتك **#${ticket.id}** في سيرفر **${guildName}**.\nيمكنك الاطلاع على محادثة التذكرة أدناه.`)
       .addFields(

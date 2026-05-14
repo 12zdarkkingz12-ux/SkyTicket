@@ -119,12 +119,13 @@ app.get('/', (req, res) => res.redirect('/dashboard'));
 
 app.get('/dashboard', ensureAuth, async (req, res) => {
   try {
+    const guilds = Array.isArray(req.user?.guilds) ? req.user.guilds : [];
     const { client } = require('./bot');
-    const guild = client.guilds.cache.get(process.env.GUILD_ID);
-    if (!guild) return res.render('dashboard', { user: req.user, guild: null });
-    res.redirect(`/guild/${guild.id}`);
+    const manageable = guilds.filter(g => client.guilds.cache.has(g.id));
+    if (manageable.length === 1) return res.redirect(`/guild/${manageable[0].id}`);
+    res.render('dashboard', { user: req.user, guilds: manageable });
   } catch {
-    res.render('dashboard', { user: req.user, guild: null });
+    res.render('dashboard', { user: req.user, guilds: [] });
   }
 });
 
@@ -184,16 +185,29 @@ app.get('/api/guild/:guildId/stats', ensureAuth, ensureGuildAdmin, async (req, r
 app.post('/api/panel', ensureAuth, ensureGuildAdmin, async (req, res) => {
   try {
     const { guild_id, name, description, embed_title, embed_description,
-            embed_color, embed_footer, welcome_message, close_message,
-            button_label, button_style, category_open, category_close,
+            embed_color, embed_footer, embed_image, embed_thumbnail,
+            welcome_message, close_message,
+            button_label, button_emoji, button_style,
+            close_button_label, claim_button_label,
+            confirm_close_label, cancel_close_label,
+            priority_placeholder, rating_placeholder,
+            category_open, category_close,
             mention_role, require_reason, dm_on_close } = req.body;
 
     const panel = await db.createPanel(guild_id, {
       name, description, embed_title, embed_description,
-      embed_color: embed_color || '#4f7ef7',
-      embed_footer, welcome_message, close_message,
-      button_label: button_label || '🎫 فتح تذكرة',
-      button_style: button_style || 'PRIMARY',
+      embed_color: embed_color || '#dc2626',
+      embed_footer, embed_image, embed_thumbnail,
+      welcome_message, close_message,
+      button_label: button_label || 'فتح تذكرة',
+      button_emoji: button_emoji || '🎫',
+      button_style: button_style || 'DANGER',
+      close_button_label: close_button_label || 'إغلاق',
+      claim_button_label: claim_button_label || 'استلام',
+      confirm_close_label: confirm_close_label || 'نعم، أغلق',
+      cancel_close_label: cancel_close_label || 'إلغاء',
+      priority_placeholder: priority_placeholder || 'تغيير الأولوية...',
+      rating_placeholder: rating_placeholder || 'قيّم تجربتك (اختياري)',
       category_open:  category_open  || null,
       category_close: category_close || null,
       mention_role:   mention_role   || null,
@@ -218,9 +232,11 @@ app.put('/api/panel/:panelId', ensureAuth, async (req, res) => {
     if (!member?.permissions.has('Administrator')) return res.status(403).json({ error: 'ليس لديك الصلاحيات الكافية' });
 
     const updates = {};
-    const allowed = ['name','description','embed_title','embed_description','embed_color','embed_footer',
-                     'welcome_message','close_message','button_label','button_style','require_reason',
-                     'dm_on_close','category_open','category_close','mention_role','embed_image','embed_thumbnail'];
+    const allowed = ['name','description','embed_title','embed_description','embed_color','embed_footer','embed_image','embed_thumbnail',
+                     'welcome_message','close_message','button_label','button_emoji','button_style',
+                     'close_button_label','claim_button_label','confirm_close_label','cancel_close_label',
+                     'priority_placeholder','rating_placeholder','require_reason',
+                     'dm_on_close','category_open','category_close','mention_role'];
     allowed.forEach(k => { if (req.body[k] !== undefined) updates[k] = req.body[k]; });
 
     const updated = await db.updatePanel(req.params.panelId, updates);

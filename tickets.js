@@ -10,10 +10,16 @@ const db = require('./database');
 // ─── Priority config ─────────────────────────────────────────────────────────
 const PRIORITY = {
   low:    { emoji: '🟢', label: 'منخفضة', color: '#22c55e' },
-  normal: { emoji: '🔵', label: 'عادية',  color: '#4f7ef7' },
+  normal: { emoji: '🔴', label: 'عادية',  color: '#dc2626' },
   high:   { emoji: '🟡', label: 'عالية',  color: '#f59e0b' },
   urgent: { emoji: '🔴', label: 'عاجلة',  color: '#ef4444' }
 };
+
+function combineLabel(label, fallback, emoji = '') {
+  const base = (label && String(label).trim()) || fallback;
+  const icon = (emoji && String(emoji).trim()) || '';
+  return icon ? `${icon} ${base}` : base;
+}
 
 // ════════════════════════════════════════════════════════════════════════════
 //  MAIN INTERACTION ROUTER
@@ -154,8 +160,8 @@ async function createTicketChannel(interaction, client, panel, reason) {
 
   const p      = PRIORITY.normal;
   const embed  = new EmbedBuilder()
-    .setColor(p.color)
-    .setTitle(`🎫 تذكرة #${newTicket.id}`)
+    .setColor(panel.embed_color || p.color || '#dc2626')
+    .setTitle(`🧾 تذكرة #${newTicket.id}`)
     .setDescription(welcomeText)
     .addFields(
       { name: '👤 المستخدم', value: `<@${user.id}>`, inline: true },
@@ -164,22 +170,22 @@ async function createTicketChannel(interaction, client, panel, reason) {
     );
 
   if (reason) embed.addFields({ name: '📝 السبب', value: reason });
-  embed.setTimestamp().setFooter({ text: `SkyTicket Pro • ${guild.name}` });
+  embed.setTimestamp().setFooter({ text: `SkyTicket Crimson • ${guild.name}` });
 
   // Control buttons
   const row1 = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(`close_ticket:${channel.id}`).setLabel('🔒 إغلاق').setStyle(ButtonStyle.Danger),
-    new ButtonBuilder().setCustomId(`claim_ticket:${channel.id}`).setLabel('✋ استلام').setStyle(ButtonStyle.Success)
+    new ButtonBuilder().setCustomId(`close_ticket:${channel.id}`).setLabel(combineLabel(panel.close_button_label, 'إغلاق')).setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId(`claim_ticket:${channel.id}`).setLabel(combineLabel(panel.claim_button_label, 'استلام')).setStyle(ButtonStyle.Success)
   );
 
   // Priority select
   const row2 = new ActionRowBuilder().addComponents(
     new StringSelectMenuBuilder()
       .setCustomId(`priority_select:${channel.id}`)
-      .setPlaceholder('🔵 تغيير الأولوية...')
+      .setPlaceholder(panel.priority_placeholder || 'تغيير الأولوية...')
       .addOptions(
         new StringSelectMenuOptionBuilder().setLabel('🟢 منخفضة').setValue('low'),
-        new StringSelectMenuOptionBuilder().setLabel('🔵 عادية').setValue('normal'),
+        new StringSelectMenuOptionBuilder().setLabel('🔴 عادية').setValue('normal'),
         new StringSelectMenuOptionBuilder().setLabel('🟡 عالية').setValue('high'),
         new StringSelectMenuOptionBuilder().setLabel('🔴 عاجلة (urgent)').setValue('urgent')
       )
@@ -214,7 +220,7 @@ async function handleClaimTicket(interaction, client) {
   await db.claimTicket(channelId, interaction.user.id);
 
   const embed = new EmbedBuilder()
-    .setColor('#22c55e')
+    .setColor('#dc2626')
     .setDescription(`✅ تم استلام التذكرة بواسطة ${interaction.user}\n\nسيتم مساعدتك في أقرب وقت ممكن.`);
 
   await interaction.update({ components: [] });
@@ -263,8 +269,8 @@ async function handleCloseTicket(interaction, client) {
     .setDescription('هل أنت متأكد من إغلاق هذه التذكرة؟');
 
   const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(`confirm_close:${channelId}:`).setLabel('✅ نعم، أغلق').setStyle(ButtonStyle.Danger),
-    new ButtonBuilder().setCustomId(`cancel_close:${channelId}`).setLabel('❌ إلغاء').setStyle(ButtonStyle.Secondary)
+    new ButtonBuilder().setCustomId(`confirm_close:${channelId}:`).setLabel(panel?.confirm_close_label || 'نعم، أغلق').setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId(`cancel_close:${channelId}`).setLabel(panel?.cancel_close_label || 'إلغاء').setStyle(ButtonStyle.Secondary)
   );
 
   return interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
@@ -317,7 +323,7 @@ async function doClose(interaction, client, channelId, reason = null) {
 
   // Closing embed + rating
   const embed = new EmbedBuilder()
-    .setColor('#ef4444')
+    .setColor('#dc2626')
     .setTitle('🔒 تم إغلاق التذكرة')
     .setDescription(`شكراً على تواصلك معنا!\n${panel?.close_message || ''}`)
     .setTimestamp();
@@ -326,7 +332,7 @@ async function doClose(interaction, client, channelId, reason = null) {
   const ratingRow = new ActionRowBuilder().addComponents(
     new StringSelectMenuBuilder()
       .setCustomId(`rating_select:${channelId}`)
-      .setPlaceholder('⭐ قيّم تجربتك (اختياري)')
+      .setPlaceholder(panel?.rating_placeholder || 'قيّم تجربتك (اختياري)')
       .addOptions(
         new StringSelectMenuOptionBuilder().setLabel('⭐ 1 - ضعيف').setValue('1'),
         new StringSelectMenuOptionBuilder().setLabel('⭐⭐ 2 - مقبول').setValue('2'),
