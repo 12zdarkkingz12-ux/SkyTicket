@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title><%= guild.name %> — SkyTicket Pro</title>
+  <title><%= guild.name %> — SkyTicket Crimson</title>
   <link rel="stylesheet" href="/style.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
@@ -34,7 +34,7 @@
 
   <div class="sidebar-brand">
     <a href="#" class="brand-logo">
-      <span class="icon">🌌</span>
+      <span class="icon"><img src="/logo.png" alt="logo" onerror="this.style.display='none'"></span>
       <div>
         <div>SkyTicket</div>
         <div class="brand-ver">Pro v2.0</div>
@@ -267,7 +267,7 @@
       <div class="panels-grid" id="panels-grid">
         <% panels.forEach(p => { %>
         <div class="panel-card" id="panel-<%= p.id %>">
-          <div class="panel-color-bar" style="background:<%= p.embed_color || '#4f7ef7' %>"></div>
+          <div class="panel-color-bar" style="background:<%= p.embed_color || '#dc2626' %>"></div>
           <div class="panel-name"><%= p.embed_title || p.name %></div>
           <div class="panel-desc"><%= p.embed_description || p.description || '' %></div>
           <div class="panel-meta">
@@ -811,18 +811,18 @@
 ═══════════════════════════════════════════════════════════ -->
 <div id="toast-container"></div>
 
+
 <!-- ══════════════════════════════════════════════════════════
      MODAL: CREATE PANEL
 ═══════════════════════════════════════════════════════════ -->
 <div class="modal-overlay" id="modal-panel-create">
-  <div class="modal" style="max-width:680px">
+  <div class="modal" style="max-width:760px">
     <div class="modal-header">
       <div class="modal-title">🗂️ إنشاء لوحة جديدة</div>
       <button class="modal-close" onclick="closeModal('modal-panel-create')">✕</button>
     </div>
     <div class="modal-body">
       <div class="form-grid">
-
         <div class="form-grid form-grid-2">
           <div class="form-group">
             <label>اسم اللوحة (داخلي)</label>
@@ -830,13 +830,13 @@
           </div>
           <div class="form-group">
             <label>لون الـ Embed</label>
-            <input type="color" id="p-color" value="#4f7ef7" oninput="updatePreview()">
+            <input type="color" id="p-color" value="#dc2626" oninput="updatePreview()">
           </div>
         </div>
 
         <div class="form-group">
           <label>عنوان الـ Embed</label>
-          <input type="text" id="p-embed-title" placeholder="🎫 فتح تذكرة" oninput="updatePreview()">
+          <input type="text" id="p-embed-title" placeholder="فتح تذكرة" oninput="updatePreview()">
         </div>
 
         <div class="form-group">
@@ -846,15 +846,27 @@
 
         <div class="form-group">
           <label>ذيل الـ Embed (اختياري)</label>
-          <input type="text" id="p-embed-footer" placeholder="SkyTicket Pro • اسم السيرفر" oninput="updatePreview()">
+          <input type="text" id="p-embed-footer" placeholder="SkyTicket Crimson • اسم السيرفر" oninput="updatePreview()">
         </div>
 
-        <!-- Live Preview -->
+        <div class="form-grid form-grid-2">
+          <div class="form-group">
+            <label>صورة الـ Embed</label>
+            <input type="url" id="p-embed-image" placeholder="https://...">
+          </div>
+          <div class="form-group">
+            <label>صورة المصغّر</label>
+            <input type="url" id="p-embed-thumbnail" placeholder="https://...">
+          </div>
+        </div>
+
         <div>
           <label>معاينة مباشرة</label>
           <div class="embed-preview" id="embed-preview">
-            <div class="embed-preview-title">🎫 فتح تذكرة</div>
+            <div class="embed-preview-title">فتح تذكرة</div>
             <div class="embed-preview-desc">اضغط على الزر أدناه لفتح تذكرة...</div>
+            <div class="embed-preview-chip" id="embed-preview-chip">🎫 فتح تذكرة</div>
+            <div class="embed-preview-footer">SkyTicket Crimson • اسم السيرفر</div>
           </div>
         </div>
 
@@ -871,19 +883,56 @@
           </div>
         </div>
 
-        <div class="form-grid form-grid-2">
+        <div class="form-grid form-grid-3">
           <div class="form-group">
-            <label>نص الزر</label>
-            <input type="text" id="p-btn-label" placeholder="🎫 فتح تذكرة" value="🎫 فتح تذكرة">
+            <label>إيموجي زر التذكرة</label>
+            <input type="text" id="p-btn-emoji" maxlength="4" placeholder="🎫" value="🎫" oninput="updatePreview()">
+          </div>
+          <div class="form-group">
+            <label>اسم زر التذكرة</label>
+            <input type="text" id="p-btn-label" placeholder="فتح تذكرة" value="فتح تذكرة" oninput="updatePreview()">
           </div>
           <div class="form-group">
             <label>لون الزر</label>
             <select id="p-btn-style">
+              <option value="DANGER">🔴 أحمر (Danger)</option>
               <option value="PRIMARY">🔵 أزرق (Primary)</option>
               <option value="SUCCESS">🟢 أخضر (Success)</option>
-              <option value="DANGER">🔴 أحمر (Danger)</option>
               <option value="SECONDARY">⚫ رمادي (Secondary)</option>
             </select>
+          </div>
+        </div>
+
+        <div class="form-grid form-grid-2">
+          <div class="form-group">
+            <label>اسم زر الإغلاق</label>
+            <input type="text" id="p-close-label" value="إغلاق">
+          </div>
+          <div class="form-group">
+            <label>اسم زر الاستلام</label>
+            <input type="text" id="p-claim-label" value="استلام">
+          </div>
+        </div>
+
+        <div class="form-grid form-grid-2">
+          <div class="form-group">
+            <label>تأكيد الإغلاق</label>
+            <input type="text" id="p-confirm-close-label" value="نعم، أغلق">
+          </div>
+          <div class="form-group">
+            <label>إلغاء الإغلاق</label>
+            <input type="text" id="p-cancel-close-label" value="إلغاء">
+          </div>
+        </div>
+
+        <div class="form-grid form-grid-2">
+          <div class="form-group">
+            <label>نص قائمة الأولوية</label>
+            <input type="text" id="p-priority-placeholder" value="تغيير الأولوية...">
+          </div>
+          <div class="form-group">
+            <label>نص التقييم</label>
+            <input type="text" id="p-rating-placeholder" value="قيّم تجربتك (اختياري)">
           </div>
         </div>
 
@@ -921,11 +970,12 @@
   </div>
 </div>
 
+
 <!-- ══════════════════════════════════════════════════════════
      MODAL: EDIT PANEL
 ═══════════════════════════════════════════════════════════ -->
 <div class="modal-overlay" id="modal-panel-edit">
-  <div class="modal" style="max-width:680px">
+  <div class="modal" style="max-width:760px">
     <div class="modal-header">
       <div class="modal-title">✏️ تعديل اللوحة</div>
       <button class="modal-close" onclick="closeModal('modal-panel-edit')">✕</button>
@@ -955,11 +1005,22 @@
           <label>ذيل الـ Embed</label>
           <input type="text" id="edit-p-embed-footer">
         </div>
+        <div class="form-grid form-grid-2">
+          <div class="form-group">
+            <label>صورة الـ Embed</label>
+            <input type="url" id="edit-p-embed-image" placeholder="https://...">
+          </div>
+          <div class="form-group">
+            <label>صورة المصغّر</label>
+            <input type="url" id="edit-p-embed-thumbnail" placeholder="https://...">
+          </div>
+        </div>
         <div>
           <label>معاينة</label>
           <div class="embed-preview" id="edit-embed-preview">
             <div class="embed-preview-title"></div>
             <div class="embed-preview-desc"></div>
+            <div class="embed-preview-chip" id="edit-embed-preview-chip"></div>
           </div>
         </div>
         <div class="divider"></div>
@@ -971,6 +1032,55 @@
           <div class="form-group">
             <label>رسالة الإغلاق</label>
             <textarea id="edit-p-close-msg" rows="2"></textarea>
+          </div>
+        </div>
+        <div class="form-grid form-grid-3">
+          <div class="form-group">
+            <label>إيموجي زر التذكرة</label>
+            <input type="text" id="edit-p-btn-emoji" maxlength="4" oninput="updateEditPreview()">
+          </div>
+          <div class="form-group">
+            <label>اسم زر التذكرة</label>
+            <input type="text" id="edit-p-btn-label" oninput="updateEditPreview()">
+          </div>
+          <div class="form-group">
+            <label>لون الزر</label>
+            <select id="edit-p-btn-style">
+              <option value="DANGER">🔴 أحمر (Danger)</option>
+              <option value="PRIMARY">🔵 أزرق (Primary)</option>
+              <option value="SUCCESS">🟢 أخضر (Success)</option>
+              <option value="SECONDARY">⚫ رمادي (Secondary)</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-grid form-grid-2">
+          <div class="form-group">
+            <label>اسم زر الإغلاق</label>
+            <input type="text" id="edit-p-close-label">
+          </div>
+          <div class="form-group">
+            <label>اسم زر الاستلام</label>
+            <input type="text" id="edit-p-claim-label">
+          </div>
+        </div>
+        <div class="form-grid form-grid-2">
+          <div class="form-group">
+            <label>تأكيد الإغلاق</label>
+            <input type="text" id="edit-p-confirm-close-label">
+          </div>
+          <div class="form-group">
+            <label>إلغاء الإغلاق</label>
+            <input type="text" id="edit-p-cancel-close-label">
+          </div>
+        </div>
+        <div class="form-grid form-grid-2">
+          <div class="form-group">
+            <label>نص قائمة الأولوية</label>
+            <input type="text" id="edit-p-priority-placeholder">
+          </div>
+          <div class="form-group">
+            <label>نص التقييم</label>
+            <input type="text" id="edit-p-rating-placeholder">
           </div>
         </div>
         <div class="form-grid form-grid-2">
@@ -1007,6 +1117,7 @@
 <!-- ══════════════════════════════════════════════════════════
      MODAL: SEND PANEL
 ═══════════════════════════════════════════════════════════ -->
+
 <div class="modal-overlay" id="modal-send-panel">
   <div class="modal" style="max-width:420px">
     <div class="modal-header">
@@ -1253,7 +1364,7 @@ function initCharts() {
         label: 'التذاكر',
         data: values,
         backgroundColor: 'rgba(79, 126, 247, 0.4)',
-        borderColor: '#4f7ef7',
+        borderColor: '#dc2626',
         borderWidth: 2,
         borderRadius: 6,
       }]
@@ -1333,31 +1444,36 @@ function filterTickets() {
 
 // ─── PANEL PREVIEW ────────────────────────────────────────────
 function updatePreview() {
-  const title   = document.getElementById('p-embed-title')?.value  || '🎫 فتح تذكرة';
-  const desc    = document.getElementById('p-embed-desc')?.value   || '';
-  const footer  = document.getElementById('p-embed-footer')?.value || '';
-  const color   = document.getElementById('p-color')?.value       || '#4f7ef7';
-  const preview = document.getElementById('embed-preview');
+  const title    = document.getElementById('p-embed-title')?.value  || 'فتح تذكرة';
+  const desc     = document.getElementById('p-embed-desc')?.value   || '';
+  const footer   = document.getElementById('p-embed-footer')?.value || 'SkyTicket Crimson • اسم السيرفر';
+  const color    = document.getElementById('p-color')?.value       || '#dc2626';
+  const btnEmoji = document.getElementById('p-btn-emoji')?.value   || '🎫';
+  const btnLabel = document.getElementById('p-btn-label')?.value   || 'فتح تذكرة';
+  const preview  = document.getElementById('embed-preview');
   if (!preview) return;
   preview.style.borderColor = color;
   preview.querySelector('.embed-preview-title').textContent = title;
   preview.querySelector('.embed-preview-desc').textContent  = desc;
-  let footerEl = preview.querySelector('.embed-preview-footer');
-  if (footer) {
-    if (!footerEl) { footerEl = document.createElement('div'); footerEl.className = 'embed-preview-footer'; preview.appendChild(footerEl); }
-    footerEl.textContent = footer;
-  } else if (footerEl) footerEl.remove();
+  const chip = preview.querySelector('#embed-preview-chip');
+  if (chip) chip.textContent = `${btnEmoji ? `${btnEmoji} ` : ''}${btnLabel}`.trim();
+  const footerEl = preview.querySelector('.embed-preview-footer');
+  if (footerEl) footerEl.textContent = footer;
 }
 
 function updateEditPreview() {
-  const title  = document.getElementById('edit-p-embed-title')?.value || '';
-  const desc   = document.getElementById('edit-p-embed-desc')?.value  || '';
-  const color  = document.getElementById('edit-p-color')?.value       || '#4f7ef7';
-  const preview = document.getElementById('edit-embed-preview');
+  const title    = document.getElementById('edit-p-embed-title')?.value || '';
+  const desc     = document.getElementById('edit-p-embed-desc')?.value  || '';
+  const color    = document.getElementById('edit-p-color')?.value       || '#dc2626';
+  const btnEmoji = document.getElementById('edit-p-btn-emoji')?.value   || '🎫';
+  const btnLabel = document.getElementById('edit-p-btn-label')?.value   || 'فتح تذكرة';
+  const preview  = document.getElementById('edit-embed-preview');
   if (!preview) return;
   preview.style.borderColor = color;
   preview.querySelector('.embed-preview-title').textContent = title;
   preview.querySelector('.embed-preview-desc').textContent  = desc;
+  const chip = preview.querySelector('#edit-embed-preview-chip');
+  if (chip) chip.textContent = `${btnEmoji ? `${btnEmoji} ` : ''}${btnLabel}`.trim();
 }
 
 // ─── PANEL CRUD ───────────────────────────────────────────────
@@ -1369,14 +1485,23 @@ async function createPanel() {
     await api('POST', '/api/panel', {
       guild_id:         GUILD_ID,
       name,
-      embed_title:      document.getElementById('p-embed-title')?.value   || '🎫 فتح تذكرة',
+      embed_title:      document.getElementById('p-embed-title')?.value   || 'فتح تذكرة',
       embed_description:document.getElementById('p-embed-desc')?.value    || '',
-      embed_color:      document.getElementById('p-color')?.value         || '#4f7ef7',
+      embed_color:      document.getElementById('p-color')?.value         || '#dc2626',
       embed_footer:     document.getElementById('p-embed-footer')?.value  || '',
+      embed_image:      document.getElementById('p-embed-image')?.value   || '',
+      embed_thumbnail:  document.getElementById('p-embed-thumbnail')?.value || '',
       welcome_message:  document.getElementById('p-welcome')?.value       || 'مرحباً {user}!',
       close_message:    document.getElementById('p-close-msg')?.value     || 'شكراً لتواصلك!',
-      button_label:     document.getElementById('p-btn-label')?.value     || '🎫 فتح تذكرة',
-      button_style:     document.getElementById('p-btn-style')?.value     || 'PRIMARY',
+      button_emoji:     document.getElementById('p-btn-emoji')?.value     || '🎫',
+      button_label:     document.getElementById('p-btn-label')?.value     || 'فتح تذكرة',
+      button_style:     document.getElementById('p-btn-style')?.value     || 'DANGER',
+      close_button_label: document.getElementById('p-close-label')?.value || 'إغلاق',
+      claim_button_label: document.getElementById('p-claim-label')?.value || 'استلام',
+      confirm_close_label: document.getElementById('p-confirm-close-label')?.value || 'نعم، أغلق',
+      cancel_close_label: document.getElementById('p-cancel-close-label')?.value || 'إلغاء',
+      priority_placeholder: document.getElementById('p-priority-placeholder')?.value || 'تغيير الأولوية...',
+      rating_placeholder: document.getElementById('p-rating-placeholder')?.value || 'قيّم تجربتك (اختياري)',
       category_open:    document.getElementById('p-cat-open')?.value      || '',
       category_close:   document.getElementById('p-cat-close')?.value     || '',
       mention_role:     document.getElementById('p-mention-role')?.value  || '',
@@ -1395,12 +1520,23 @@ function openPanelEdit(panelId) {
 
   document.getElementById('edit-panel-id').value       = panel.id;
   document.getElementById('edit-p-name').value         = panel.name || '';
-  document.getElementById('edit-p-color').value        = panel.embed_color || '#4f7ef7';
+  document.getElementById('edit-p-color').value        = panel.embed_color || '#dc2626';
   document.getElementById('edit-p-embed-title').value  = panel.embed_title || '';
   document.getElementById('edit-p-embed-desc').value   = panel.embed_description || '';
   document.getElementById('edit-p-embed-footer').value = panel.embed_footer || '';
+  document.getElementById('edit-p-embed-image').value  = panel.embed_image || '';
+  document.getElementById('edit-p-embed-thumbnail').value = panel.embed_thumbnail || '';
   document.getElementById('edit-p-welcome').value      = panel.welcome_message || '';
   document.getElementById('edit-p-close-msg').value    = panel.close_message || '';
+  document.getElementById('edit-p-btn-emoji').value    = panel.button_emoji || '🎫';
+  document.getElementById('edit-p-btn-label').value     = panel.button_label || 'فتح تذكرة';
+  document.getElementById('edit-p-btn-style').value     = panel.button_style || 'DANGER';
+  document.getElementById('edit-p-close-label').value   = panel.close_button_label || 'إغلاق';
+  document.getElementById('edit-p-claim-label').value   = panel.claim_button_label || 'استلام';
+  document.getElementById('edit-p-confirm-close-label').value = panel.confirm_close_label || 'نعم، أغلق';
+  document.getElementById('edit-p-cancel-close-label').value   = panel.cancel_close_label || 'إلغاء';
+  document.getElementById('edit-p-priority-placeholder').value = panel.priority_placeholder || 'تغيير الأولوية...';
+  document.getElementById('edit-p-rating-placeholder').value   = panel.rating_placeholder || 'قيّم تجربتك (اختياري)';
   document.getElementById('edit-p-cat-open').value     = panel.category_open || '';
   document.getElementById('edit-p-cat-close').value    = panel.category_close || '';
   document.getElementById('edit-p-mention-role').value = panel.mention_role || '';
@@ -1420,8 +1556,19 @@ async function savePanel() {
       embed_description: document.getElementById('edit-p-embed-desc')?.value,
       embed_color:       document.getElementById('edit-p-color')?.value,
       embed_footer:      document.getElementById('edit-p-embed-footer')?.value,
+      embed_image:       document.getElementById('edit-p-embed-image')?.value,
+      embed_thumbnail:   document.getElementById('edit-p-embed-thumbnail')?.value,
       welcome_message:   document.getElementById('edit-p-welcome')?.value,
       close_message:     document.getElementById('edit-p-close-msg')?.value,
+      button_emoji:      document.getElementById('edit-p-btn-emoji')?.value,
+      button_label:      document.getElementById('edit-p-btn-label')?.value,
+      button_style:      document.getElementById('edit-p-btn-style')?.value,
+      close_button_label:document.getElementById('edit-p-close-label')?.value,
+      claim_button_label:document.getElementById('edit-p-claim-label')?.value,
+      confirm_close_label:document.getElementById('edit-p-confirm-close-label')?.value,
+      cancel_close_label:document.getElementById('edit-p-cancel-close-label')?.value,
+      priority_placeholder:document.getElementById('edit-p-priority-placeholder')?.value,
+      rating_placeholder:document.getElementById('edit-p-rating-placeholder')?.value,
       category_open:     document.getElementById('edit-p-cat-open')?.value,
       category_close:    document.getElementById('edit-p-cat-close')?.value,
       mention_role:      document.getElementById('edit-p-mention-role')?.value,

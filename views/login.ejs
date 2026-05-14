@@ -3,18 +3,24 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>تسجيل الدخول — SkyTicket Pro</title>
+  <title>تسجيل الدخول — SkyTicket Crimson</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <div class="login-page">
     <div class="login-card">
-      <div class="login-logo">🌌 SkyTicket</div>
-      <p style="font-size:11px;color:var(--text-dim);margin-bottom:4px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;">Pro Dashboard</p>
+      <div class="login-brand">
+        <div class="login-logo-wrap">
+          <img src="/logo.png" alt="SkyTicket logo" class="login-logo-img" onerror="this.style.display='none';this.parentElement.classList.add('fallback')">
+        </div>
+        <div class="login-title">SkyTicket Crimson</div>
+        <div class="login-kicker">Pro Dashboard</div>
+      </div>
+
       <p class="login-subtitle">سجّل دخولك بحساب Discord للوصول إلى لوحة التحكم</p>
 
       <a href="/auth/discord" class="login-btn">
-        <svg width="20" height="20" viewBox="0 0 71 55" fill="none">
+        <svg width="20" height="20" viewBox="0 0 71 55" fill="none" aria-hidden="true">
           <path d="M60.1 4.9A58.5 58.5 0 0 0 45.5.9a40.5 40.5 0 0 0-1.8 3.7 54.1 54.1 0 0 0-16.4 0A40.9 40.9 0 0 0 25.5.9 58.4 58.4 0 0 0 10.9 5C1.6 18.9-1 32.5.3 45.9A59 59 0 0 0 18.3 55a44.8 44.8 0 0 0 3.9-6.3 38.4 38.4 0 0 1-6.1-2.9l1.5-1.1c11.8 5.5 24.6 5.5 36.3 0l1.5 1.1a38.5 38.5 0 0 1-6.1 2.9 44.8 44.8 0 0 0 3.9 6.3 58.8 58.8 0 0 0 17.9-9.1C72.7 30.4 68.6 17 60.1 4.9ZM23.7 37.8c-3.5 0-6.4-3.2-6.4-7.1s2.8-7.1 6.4-7.1 6.5 3.2 6.4 7.1c0 3.9-2.8 7.1-6.4 7.1Zm23.6 0c-3.5 0-6.4-3.2-6.4-7.1s2.8-7.1 6.4-7.1 6.5 3.2 6.4 7.1c0 3.9-2.8 7.1-6.4 7.1Z" fill="#fff"/>
         </svg>
         تسجيل الدخول بـ Discord
@@ -22,7 +28,7 @@
 
       <div class="login-footer">
         <p>🔒 يُطلب صلاحية <strong>Administrator</strong> في السيرفر للوصول</p>
-        <p style="margin-top:6px">SkyTicket Pro • by Dark</p>
+        <p style="margin-top:6px">SkyTicket Crimson • by Dark</p>
       </div>
     </div>
   </div>

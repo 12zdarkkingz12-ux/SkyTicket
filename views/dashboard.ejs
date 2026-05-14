@@ -2,24 +2,59 @@
 <html dir="rtl" lang="ar">
 <head>
   <meta charset="UTF-8">
-  <title>لوحة التحكم - SkyTicket</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>لوحة التحكم — SkyTicket Crimson</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <div class="container">
-    <h1>🎫 لوحة التحكم</h1>
-    <p>مرحباً <strong><%= user.username %></strong></p>
-    <a href="/logout" class="btn btn-danger">تسجيل خروج</a>
-    <h2>السيرفرات المتاحة</h2>
-    <div class="guilds">
-      <% guilds.forEach(g => { %>
-        <a href="/guild/<%= g.id %>" class="guild-card">
-          <% if (g.icon) { %>
-            <img src="https://cdn.discordapp.com/icons/<%= g.id %>/<%= g.icon %>.png" alt="icon">
-          <% } %>
-          <span><%= g.name %></span>
-        </a>
-      <% }) %>
+  <div class="dashboard-shell">
+    <div class="dashboard-card">
+      <div class="dashboard-brand">
+        <div class="dashboard-logo">
+          <img src="/logo.png" alt="SkyTicket" onerror="this.style.display='none'">
+        </div>
+        <div>
+          <div class="dashboard-title">SkyTicket Crimson</div>
+          <div class="dashboard-subtitle">لوحة التحكم للسيرفرات المتاحة</div>
+        </div>
+      </div>
+
+      <div class="dashboard-user">
+        <div>
+          <div class="dashboard-user-label">مرحباً</div>
+          <div class="dashboard-user-name"><%= user.username %></div>
+        </div>
+        <a href="/logout" class="btn btn-danger btn-sm">تسجيل خروج</a>
+      </div>
+
+      <div class="dashboard-section-title">السيرفرات المتاحة</div>
+
+      <div class="guilds-grid">
+        <% (guilds || []).forEach(g => { %>
+          <a href="/guild/<%= g.id %>" class="guild-entry">
+            <div class="guild-entry-icon">
+              <% if (g.icon) { %>
+                <img src="https://cdn.discordapp.com/icons/<%= g.id %>/<%= g.icon %>.png?size=128" alt="icon">
+              <% } else { %>
+                <span>🏠</span>
+              <% } %>
+            </div>
+            <div class="guild-entry-body">
+              <div class="guild-entry-name"><%= g.name %></div>
+              <div class="guild-entry-sub">فتح لوحة الإدارة</div>
+            </div>
+            <div class="guild-entry-arrow">←</div>
+          </a>
+        <% }) %>
+      </div>
+
+      <% if (!(guilds || []).length) { %>
+        <div class="empty" style="margin-top:18px">
+          <div class="empty-icon">🛰️</div>
+          <div class="empty-text">لا توجد سيرفرات متاحة</div>
+          <div class="empty-sub">تأكد أن البوت مضاف إلى السيرفر وأن حسابك يملك صلاحية الإدارة</div>
+        </div>
+      <% } %>
     </div>
   </div>
 </body>
