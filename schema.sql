@@ -1,5 +1,5 @@
 -- ╔══════════════════════════════════════╗
--- ║    SkyTicket Crimson — Database Schema   ║
+-- ║    SkyTicket — Database Schema   ║
 -- ║         by Dark  •  v2.1.0           ║
 -- ╚══════════════════════════════════════╝
 

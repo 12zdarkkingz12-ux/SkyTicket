@@ -170,7 +170,7 @@ async function createTicketChannel(interaction, client, panel, reason) {
     );
 
   if (reason) embed.addFields({ name: '📝 السبب', value: reason });
-  embed.setTimestamp().setFooter({ text: `SkyTicket Crimson • ${guild.name}` });
+  embed.setTimestamp().setFooter({ text: `SkyTicket • ${guild.name}` });
 
   // Control buttons
   const row1 = new ActionRowBuilder().addComponents(

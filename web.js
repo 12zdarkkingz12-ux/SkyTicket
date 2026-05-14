@@ -7,6 +7,9 @@ const db       = require('./database');
 
 const app = express();
 
+// Render/Proxy-aware session handling
+app.set('trust proxy', 1);
+
 // ════════════════════════════════════════════════════════════════════════════
 //  SETUP
 // ════════════════════════════════════════════════════════════════════════════
@@ -17,19 +20,27 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // ─── Session ─────────────────────────────────────────────────────────────────
+const callbackURL = process.env.DISCORD_CALLBACK_URL || process.env.REDIRECT_URI || process.env.CALLBACK_URL || 'http://localhost:3000/auth/callback';
+
 app.use(session({
   store:             new db.SupabaseStore(),
   secret:            process.env.SESSION_SECRET || 'skyticket_secret',
   resave:            false,
   saveUninitialized: false,
-  cookie:            { secure: process.env.NODE_ENV === 'production', maxAge: 7 * 24 * 60 * 60 * 1000 }
+  proxy:             true,
+  cookie:            {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    sameSite: 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000
+  }
 }));
 
 // ─── Passport Discord OAuth2 ─────────────────────────────────────────────────
 passport.use(new DiscordStrategy({
   clientID:     process.env.CLIENT_ID,
   clientSecret: process.env.CLIENT_SECRET,
-  callbackURL:  process.env.REDIRECT_URI,
+  callbackURL,
   scope:        ['identify', 'guilds']
 }, (_at, _rt, profile, done) => done(null, profile)));
 

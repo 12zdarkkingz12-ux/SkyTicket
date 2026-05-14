@@ -22,7 +22,7 @@ const client = new Client({
 // ─── Ready ───────────────────────────────────────────────────────────────────
 client.once(Events.ClientReady, async () => {
   console.log(`[Bot] Logged in as ${client.user.tag}`);
-  client.user.setActivity('🎫 SkyTicket Crimson', { type: 3 }); // Watching
+  client.user.setActivity('🎫 SkyTicket', { type: 3 }); // Watching
 
   await registerCommands(client);
   await db.ensureGuild(process.env.GUILD_ID).catch(() => {});

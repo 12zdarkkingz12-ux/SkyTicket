@@ -7,7 +7,7 @@ const db = require('./database');
 // ─── Startup ─────────────────────────────────────────────────────────────────
 console.log(`
  ╔═══════════════════════════════╗
- ║   🔴 SkyTicket Crimson  v2.1.0   ║
+ ║   🔴 SkyTicket  v2.1.0   ║
  ║      Developed by Dark        ║
  ╚═══════════════════════════════╝
 `);
