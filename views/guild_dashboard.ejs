@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title><%= guild.name %> — SkyTicket Crimson</title>
+  <title><%= guild.name %> — SkyTicket</title>
   <link rel="stylesheet" href="/style.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
@@ -846,7 +846,7 @@
 
         <div class="form-group">
           <label>ذيل الـ Embed (اختياري)</label>
-          <input type="text" id="p-embed-footer" placeholder="SkyTicket Crimson • اسم السيرفر" oninput="updatePreview()">
+          <input type="text" id="p-embed-footer" placeholder="SkyTicket • اسم السيرفر" oninput="updatePreview()">
         </div>
 
         <div class="form-grid form-grid-2">
@@ -866,7 +866,7 @@
             <div class="embed-preview-title">فتح تذكرة</div>
             <div class="embed-preview-desc">اضغط على الزر أدناه لفتح تذكرة...</div>
             <div class="embed-preview-chip" id="embed-preview-chip">🎫 فتح تذكرة</div>
-            <div class="embed-preview-footer">SkyTicket Crimson • اسم السيرفر</div>
+            <div class="embed-preview-footer">SkyTicket • اسم السيرفر</div>
           </div>
         </div>
 
@@ -1446,7 +1446,7 @@ function filterTickets() {
 function updatePreview() {
   const title    = document.getElementById('p-embed-title')?.value  || 'فتح تذكرة';
   const desc     = document.getElementById('p-embed-desc')?.value   || '';
-  const footer   = document.getElementById('p-embed-footer')?.value || 'SkyTicket Crimson • اسم السيرفر';
+  const footer   = document.getElementById('p-embed-footer')?.value || 'SkyTicket • اسم السيرفر';
   const color    = document.getElementById('p-color')?.value       || '#dc2626';
   const btnEmoji = document.getElementById('p-btn-emoji')?.value   || '🎫';
   const btnLabel = document.getElementById('p-btn-label')?.value   || 'فتح تذكرة';
