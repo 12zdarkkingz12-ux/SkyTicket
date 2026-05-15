@@ -25,6 +25,90 @@
   const BANS       = <%- JSON.stringify(bans) %>;
   const LOGS       = <%- JSON.stringify(logs) %>;
   const GUILD_DATA = <%- JSON.stringify(guildData) %>;
+
+  const LOOKUPS = {
+    channels: null,
+    roles: null,
+    members: null,
+  };
+
+  async function fetchLookup(kind) {
+    if (LOOKUPS[kind]) return LOOKUPS[kind];
+
+    const endpoints = {
+      channels: `/api/guild/${GUILD_ID}/channels`,
+      roles:    `/api/guild/${GUILD_ID}/roles`,
+      members:  `/api/guild/${GUILD_ID}/members`,
+    };
+
+    const data = await api('GET', endpoints[kind]);
+    LOOKUPS[kind] = Array.isArray(data) ? data : [];
+    return LOOKUPS[kind];
+  }
+
+  function setSelectOptions(select, items, selectedValue = '', emptyLabel = '— بدون —', formatter = (item) => item.name) {
+    if (!select) return;
+    const current = selectedValue || select.value || '';
+    const previous = Array.from(select.querySelectorAll('option'))
+      .find(opt => opt.value === current);
+
+    select.innerHTML = '';
+
+    const empty = document.createElement('option');
+    empty.value = '';
+    empty.textContent = emptyLabel;
+    select.appendChild(empty);
+
+    items.forEach(item => {
+      const opt = document.createElement('option');
+      opt.value = item.id;
+      opt.textContent = formatter(item);
+      select.appendChild(opt);
+    });
+
+    if (current && !select.querySelector(`option[value="${CSS.escape(current)}"]`)) {
+      const opt = document.createElement('option');
+      opt.value = current;
+      opt.textContent = `${current} (قديم)`;
+      select.appendChild(opt);
+    }
+
+    if (current) select.value = current;
+    else if (previous) select.value = previous.value;
+  }
+
+  async function loadDropdowns() {
+    try {
+      const [channels, roles, members] = await Promise.all([
+        fetchLookup('channels').catch(() => []),
+        fetchLookup('roles').catch(() => []),
+        fetchLookup('members').catch(() => []),
+      ]);
+
+      const channelSelects = [
+        document.getElementById('s-log-channel'),
+        document.getElementById('send-channel-id'),
+      ].filter(Boolean);
+      channelSelects.forEach(select => {
+        const selected = select.dataset.selected || select.value || '';
+        setSelectOptions(select, channels, selected, '— اختر القناة —', ch => `${ch.name} (${ch.id})`);
+      });
+
+      const roleSelects = [
+        document.getElementById('p-mention-role'),
+        document.getElementById('edit-p-mention-role'),
+      ].filter(Boolean);
+      roleSelects.forEach(select => setSelectOptions(select, roles, select.value, '— بدون —', role => `${role.name}${role.color && role.color !== '#000000' ? ` • ${role.color}` : ''}`));
+
+      const memberSelects = [
+        document.getElementById('staff-user-id'),
+        document.getElementById('ban-user-id'),
+      ].filter(Boolean);
+      memberSelects.forEach(select => setSelectOptions(select, members, select.value, '— اختر العضو —', member => `${member.name} (${member.tag || member.id})`));
+    } catch (err) {
+      console.warn('[UI] Failed to load dropdowns:', err);
+    }
+  }
 </script>
 
 <div class="layout">
@@ -687,10 +771,11 @@
           </div>
 
           <div class="form-group">
-            <label>قناة السجلات (معرف القناة)</label>
-            <input type="text" id="s-log-channel"
-                   value="<%= guildData.log_channel_id || '' %>"
-                   placeholder="مثال: 123456789012345678">
+            <label>قناة السجلات</label>
+            <select id="s-log-channel" data-selected="<%= guildData.log_channel_id || '' %>">
+              <option value="">— اختر القناة —</option>
+            </select>
+            <p style="font-size:11px;color:var(--text-dim);margin-top:4px">تظهر القنوات النصية المتاحة في السيرفر.</p>
           </div>
 
         </div>
@@ -940,18 +1025,31 @@
 
         <div class="form-grid form-grid-2">
           <div class="form-group">
-            <label>تصنيف التذاكر المفتوحة (معرف)</label>
-            <input type="text" id="p-cat-open" placeholder="معرف الكاتيقوري">
+            <label>تصنيف التذاكر المفتوحة</label>
+            <select id="p-cat-open">
+              <option value="">— بدون —</option>
+              <% categoryChannels.forEach(ch => { %>
+                <option value="<%= ch.id %>"><%= ch.name %></option>
+              <% }) %>
+            </select>
           </div>
           <div class="form-group">
-            <label>تصنيف التذاكر المغلقة (معرف)</label>
-            <input type="text" id="p-cat-close" placeholder="معرف الكاتيقوري">
+            <label>تصنيف التذاكر المغلقة</label>
+            <select id="p-cat-close">
+              <option value="">— بدون —</option>
+              <% categoryChannels.forEach(ch => { %>
+                <option value="<%= ch.id %>"><%= ch.name %></option>
+              <% }) %>
+            </select>
           </div>
         </div>
 
         <div class="form-group">
-          <label>رتبة الإشعار (معرف)</label>
-          <input type="text" id="p-mention-role" placeholder="معرف الرتبة (اختياري)">
+          <label>رتبة الإشعار</label>
+          <select id="p-mention-role">
+            <option value="">— بدون —</option>
+          </select>
+          <p style="font-size:11px;color:var(--text-dim);margin-top:4px">اختر الرتبة مباشرة من السيرفر.</p>
         </div>
 
         <div style="display:flex;gap:12px;flex-wrap:wrap">
@@ -1088,16 +1186,29 @@
         <div class="form-grid form-grid-2">
           <div class="form-group">
             <label>تصنيف المفتوحة</label>
-            <input type="text" id="edit-p-cat-open">
+            <select id="edit-p-cat-open">
+              <option value="">— بدون —</option>
+              <% categoryChannels.forEach(ch => { %>
+                <option value="<%= ch.id %>"><%= ch.name %></option>
+              <% }) %>
+            </select>
           </div>
           <div class="form-group">
             <label>تصنيف المغلقة</label>
-            <input type="text" id="edit-p-cat-close">
+            <select id="edit-p-cat-close">
+              <option value="">— بدون —</option>
+              <% categoryChannels.forEach(ch => { %>
+                <option value="<%= ch.id %>"><%= ch.name %></option>
+              <% }) %>
+            </select>
           </div>
         </div>
         <div class="form-group">
           <label>رتبة الإشعار</label>
-          <input type="text" id="edit-p-mention-role">
+          <select id="edit-p-mention-role">
+            <option value="">— بدون —</option>
+          </select>
+          <p style="font-size:11px;color:var(--text-dim);margin-top:4px">اختر الرتبة من القائمة بدل المعرف.</p>
         </div>
         <div style="display:flex;gap:12px;flex-wrap:wrap">
           <label style="display:flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0;font-size:13px;font-weight:500;cursor:pointer">
@@ -1129,10 +1240,12 @@
     <div class="modal-body">
       <input type="hidden" id="send-panel-id">
       <div class="form-group">
-        <label>معرف القناة</label>
-        <input type="text" id="send-channel-id" placeholder="مثال: 123456789012345678">
+        <label>القناة</label>
+        <select id="send-channel-id">
+          <option value="">— اختر القناة —</option>
+        </select>
         <p style="font-size:11px;color:var(--text-dim);margin-top:4px">
-          انقر بزر اليمين على القناة → نسخ المعرف
+          اختر قناة نصية مباشرة من السيرفر.
         </p>
       </div>
     </div>
@@ -1154,10 +1267,12 @@
     </div>
     <div class="modal-body">
       <div class="form-group">
-        <label>معرف المستخدم (User ID)</label>
-        <input type="text" id="staff-user-id" placeholder="مثال: 123456789012345678">
+        <label>المستخدم</label>
+        <select id="staff-user-id">
+          <option value="">— اختر العضو —</option>
+        </select>
         <p style="font-size:11px;color:var(--text-dim);margin-top:4px">
-          انقر بزر اليمين على المستخدم → نسخ المعرف
+          اختر عضو الدعم من القائمة بدل نسخ المعرف.
         </p>
       </div>
     </div>
@@ -1230,8 +1345,10 @@
     <div class="modal-body">
       <div class="form-grid">
         <div class="form-group">
-          <label>معرف المستخدم</label>
-          <input type="text" id="ban-user-id" placeholder="مثال: 123456789012345678">
+          <label>المستخدم</label>
+          <select id="ban-user-id">
+            <option value="">— اختر العضو —</option>
+          </select>
         </div>
         <div class="form-group">
           <label>سبب الحظر</label>
@@ -1516,7 +1633,8 @@ async function createPanel() {
   } catch (err) { toast(err.message, 'error'); }
 }
 
-function openPanelEdit(panelId) {
+async function openPanelEdit(panelId) {
+  await loadDropdowns();
   const panel = PANELS.find(p => p.id === panelId);
   if (!panel) return toast('اللوحة غير موجودة', 'error');
 
@@ -1539,9 +1657,33 @@ function openPanelEdit(panelId) {
   document.getElementById('edit-p-cancel-close-label').value   = panel.cancel_close_label || 'إلغاء';
   document.getElementById('edit-p-priority-placeholder').value = panel.priority_placeholder || 'تغيير الأولوية...';
   document.getElementById('edit-p-rating-placeholder').value   = panel.rating_placeholder || 'قيّم تجربتك (اختياري)';
-  document.getElementById('edit-p-cat-open').value     = panel.category_open || '';
-  document.getElementById('edit-p-cat-close').value    = panel.category_close || '';
-  document.getElementById('edit-p-mention-role').value = panel.mention_role || '';
+  const openCat = panel.category_open || '';
+  const closeCat = panel.category_close || '';
+  document.getElementById('edit-p-cat-open').value     = openCat;
+  document.getElementById('edit-p-cat-close').value    = closeCat;
+  if (openCat && !document.getElementById('edit-p-cat-open').querySelector(`option[value="${CSS.escape(openCat)}"]`)) {
+    const opt = document.createElement('option');
+    opt.value = openCat;
+    opt.textContent = `${openCat} (قديم)`;
+    document.getElementById('edit-p-cat-open').appendChild(opt);
+  }
+  if (closeCat && !document.getElementById('edit-p-cat-close').querySelector(`option[value="${CSS.escape(closeCat)}"]`)) {
+    const opt = document.createElement('option');
+    opt.value = closeCat;
+    opt.textContent = `${closeCat} (قديم)`;
+    document.getElementById('edit-p-cat-close').appendChild(opt);
+  }
+  const mentionRole = panel.mention_role || '';
+  const mentionSelect = document.getElementById('edit-p-mention-role');
+  if (mentionSelect) {
+    if (mentionRole && !mentionSelect.querySelector(`option[value="${CSS.escape(mentionRole)}"]`)) {
+      const opt = document.createElement('option');
+      opt.value = mentionRole;
+      opt.textContent = `${mentionRole} (قديم)`;
+      mentionSelect.appendChild(opt);
+    }
+    mentionSelect.value = mentionRole;
+  }
   document.getElementById('edit-p-require-reason').checked = !!panel.require_reason;
   document.getElementById('edit-p-dm-on-close').checked    = !!panel.dm_on_close;
   updateEditPreview();
@@ -1592,16 +1734,18 @@ async function deletePanel(panelId, name) {
   } catch (err) { toast(err.message, 'error'); }
 }
 
-function openSendPanel(panelId) {
+async function openSendPanel(panelId) {
+  await loadDropdowns();
   document.getElementById('send-panel-id').value = panelId;
   document.getElementById('send-channel-id').value = '';
   openModal('modal-send-panel');
 }
 
 async function sendPanel() {
+  await loadDropdowns();
   const panelId   = document.getElementById('send-panel-id')?.value;
   const channelId = document.getElementById('send-channel-id')?.value?.trim();
-  if (!channelId) return toast('أدخل معرف القناة', 'error');
+  if (!channelId) return toast('اختر القناة', 'error');
   try {
     await api('POST', `/api/panel/${panelId}/send`, { channel_id: channelId });
     toast('تم إرسال اللوحة في القناة ✅', 'success');
@@ -1611,8 +1755,9 @@ async function sendPanel() {
 
 // ─── STAFF CRUD ───────────────────────────────────────────────
 async function addStaff() {
+  await loadDropdowns();
   const userId = document.getElementById('staff-user-id')?.value?.trim();
-  if (!userId) return toast('أدخل معرف المستخدم', 'error');
+  if (!userId) return toast('اختر العضو', 'error');
   try {
     await api('POST', '/api/staff', { guild_id: GUILD_ID, user_id: userId });
     toast('تمت إضافة عضو الدعم ✅', 'success');
@@ -1663,10 +1808,11 @@ async function deleteKeyword(id) {
 
 // ─── BAN / UNBAN ─────────────────────────────────────────────
 async function banUser() {
+  await loadDropdowns();
   const userId   = document.getElementById('ban-user-id')?.value?.trim();
   const reason   = document.getElementById('ban-reason')?.value?.trim();
   const duration = document.getElementById('ban-duration')?.value;
-  if (!userId || !reason) return toast('أدخل المعرف والسبب', 'error');
+  if (!userId || !reason) return toast('اختر العضو وأدخل السبب', 'error');
   try {
     await api('POST', '/api/ban', { guild_id: GUILD_ID, user_id: userId, reason, duration });
     toast(`تم حظر ${userId} بنجاح 🚫`, 'success');
@@ -1737,6 +1883,7 @@ async function refreshStats() {
 
 // ─── INIT ─────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+  loadDropdowns();
   animateCounters();
   initCharts();
   initLeaderboard();
