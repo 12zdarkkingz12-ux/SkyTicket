@@ -21,6 +21,7 @@
   const PANELS     = <%- JSON.stringify(panels) %>;
   const STAFF      = <%- JSON.stringify(staff) %>;
   const KEYWORDS   = <%- JSON.stringify(keywords) %>;
+  const GUILD_ROLES = <%- JSON.stringify(guildRoles || []) %>;
   const TICKETS    = <%- JSON.stringify(tickets) %>;
   const BANS       = <%- JSON.stringify(bans) %>;
   const LOGS       = <%- JSON.stringify(logs) %>;
@@ -198,6 +199,11 @@
     <li class="nav-item" data-tab="logs">
       <span class="nav-icon">📋</span>
       <span>السجلات</span>
+    </li>
+
+    <li class="nav-item" data-tab="help">
+      <span class="nav-icon">📖</span>
+      <span>التعليمات</span>
     </li>
 
   </ul>
@@ -528,7 +534,7 @@
           <div class="staff-info">
             <div class="staff-tag">
               <span class="available-dot <%= s.available ? '' : 'offline' %>"></span>
-              <code style="font-size:13px"><%= s.user_id %></code>
+              <strong style="font-size:14px"><%= s.displayName || s.user_id %></strong>
             </div>
             <div class="staff-stats">
               <span>⭐ <%= s.points_total || 0 %> نقطة</span>
@@ -537,9 +543,14 @@
               <span><%= s.available ? '🟢 متاح' : '🔴 غير متاح' %></span>
             </div>
           </div>
-          <button class="btn btn-danger btn-sm btn-icon"
-                  onclick="removeStaff('<%= s.user_id %>')"
-                  title="إزالة من الدعم">🗑️</button>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-primary btn-sm"
+                    onclick="openSetRankModal('<%= s.user_id %>', '<%= s.displayName || s.user_id %>')"
+                    title="تعيين رتبة">🏅</button>
+            <button class="btn btn-danger btn-sm btn-icon"
+                    onclick="removeStaff('<%= s.user_id %>')"
+                    title="إزالة من الدعم">🗑️</button>
+          </div>
         </div>
         <% }) %>
       </div>
@@ -572,7 +583,7 @@
                   <% } else if(i===2) { %><span style="font-size:18px">🥉</span>
                   <% } else { %><span style="color:var(--text-dim)">#<%= i+1 %></span><% } %>
                 </td>
-                <td><code style="background:var(--bg3);padding:2px 8px;border-radius:4px;font-size:12px"><%= s.user_id %></code></td>
+                <td><code style="background:var(--bg3);padding:2px 8px;border-radius:4px;font-size:12px"><%= s.displayName || s.user_id %></code></td>
                 <td><strong style="color:var(--accent)"><%= s.points_total || 0 %></strong></td>
                 <td><%= s.streak_days || 0 %></td>
                 <td><strong style="color:var(--accent)"><%= s.tickets_closed || 0 %></strong></td>
@@ -705,7 +716,12 @@
             <tbody id="bans-tbody">
               <% bans.forEach(b => { %>
               <tr id="ban-<%= b.user_id %>">
-                <td><code style="background:var(--bg3);padding:2px 8px;border-radius:4px;font-size:12px"><%= b.user_id %></code></td>
+                <td>
+                  <div style="display:flex;flex-direction:column;gap:2px">
+                    <strong style="font-size:13px"><%= b.displayName || b.user_id %></strong>
+                    <code style="background:var(--bg3);padding:2px 6px;border-radius:4px;font-size:11px;color:var(--text-muted)"><%= b.user_id %></code>
+                  </div>
+                </td>
                 <td style="max-width:200px;font-size:13px"><%= b.reason || '—' %></td>
                 <td style="font-size:12px;color:var(--text-muted)">
                   <%= new Date(b.created_at).toLocaleDateString('ar-SA') %>
@@ -719,7 +735,7 @@
                     <span class="badge badge-closed">دائم</span>
                   <% } %>
                 </td>
-                <td style="font-size:12px;color:var(--text-muted)"><code><%= b.banned_by %></code></td>
+                <td style="font-size:12px;color:var(--text-muted)"><%= b.bannedByName || b.banned_by || '—' %></td>
                 <td>
                   <button class="btn btn-success btn-sm" onclick="unbanUser('<%= b.user_id %>')">
                     ✅ رفع الحظر
@@ -947,7 +963,8 @@
             STAFF_REMOVE: {icon:'👤', label:'إزالة دعم',        color:'var(--danger)'},
             BAN:          {icon:'🚫', label:'حظر مستخدم',       color:'var(--danger)'},
             UNBAN:        {icon:'✅', label:'رفع حظر',           color:'var(--success)'},
-            SETTINGS_UPDATE:{icon:'⚙️',label:'تحديث الإعدادات', color:'var(--purple)'}
+            SETTINGS_UPDATE:{icon:'⚙️',label:'تحديث الإعدادات', color:'var(--purple)'},
+            RANK_SET:       {icon:'🏅', label:'تعيين رتبة',       color:'var(--warning)'}
           }; %>
 
           <% logs.forEach(log => { %>
@@ -957,8 +974,8 @@
               <div class="log-body">
                 <div class="log-action" style="color:<%= meta.color %>"><%= meta.label %></div>
                 <div class="log-details">
-                  <% if (log.actor_id) { %><code style="font-size:11px"><%= log.actor_id %></code><% } %>
-                  <% if (log.target_id) { %> → <code style="font-size:11px"><%= log.target_id %></code><% } %>
+                  <% if (log.actor_id) { %><strong style="font-size:12px"><%= log.actorName || log.actor_id %></strong><% } %>
+                  <% if (log.target_id) { %> → <strong style="font-size:12px"><%= log.targetName || log.target_id %></strong><% } %>
                 </div>
               </div>
               <div class="log-time"><%= new Date(log.created_at).toLocaleString('ar-SA') %></div>
@@ -969,6 +986,222 @@
       </div>
     <% } %>
 
+</div>
+
+<!-- ──────────────────────────────────────────────────────────
+     TAB: HELP
+────────────────────────────────────────────────────────── -->
+<div id="tab-help" class="tab-content">
+  <div class="page-header">
+    <div>
+      <div class="page-title">التعليمات 📖</div>
+      <div class="page-subtitle">دليل استخدام SkyTicket وحل المشاكل الشائعة</div>
+    </div>
+  </div>
+  <div class="page-body">
+
+    <!-- Search -->
+    <div style="max-width:500px;margin-bottom:24px">
+      <input type="text" id="help-search" placeholder="🔍 ابحث عن أمر أو مشكلة..." oninput="filterHelp(this.value)"
+             style="width:100%;padding:10px 14px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px">
+    </div>
+
+    <div id="help-content">
+
+      <!-- Commands -->
+      <div class="card help-section" data-tags="أوامر panel staff ban unban stats leaderboard ticket setrank">
+        <div class="card-header"><div class="card-title">⚡ الأوامر المتاحة</div></div>
+        <div style="padding:16px;display:flex;flex-direction:column;gap:8px">
+
+          <div class="help-item"><code>/panel create</code> — إنشاء لوحة تذاكر جديدة مع خيارات الفئة والرتبة والبوتون</div>
+          <div class="help-item"><code>/panel send [panel_id]</code> — إرسال اللوحة في قناة معينة (استخدم الرقم من /panel list)</div>
+          <div class="help-item"><code>/panel list</code> — عرض كل اللوحات مع أرقامها ومعرفاتها</div>
+          <div class="help-item"><code>/panel delete [panel_id]</code> — حذف لوحة نهائياً</div>
+          <div class="help-item"><code>/staff add [@user]</code> — إضافة عضو لفريق الدعم</div>
+          <div class="help-item"><code>/staff remove [@user]</code> — إزالة عضو من فريق الدعم</div>
+          <div class="help-item"><code>/staff list</code> — عرض قائمة فريق الدعم مع نقاطهم</div>
+          <div class="help-item"><code>/staff toggle</code> — تبديل حالتك بين متاح وغير متاح</div>
+          <div class="help-item"><code>/setrank [@user] [رتبة]</code> — 🆕 تعيين رتبة كاملة لعضو مباشرة بدون إضافة نقاط واحدة واحدة</div>
+          <div class="help-item"><code>/ban [@user] [سبب] [مدة]</code> — حظر مستخدم من فتح التذاكر (مثال للمدة: 7d أو permanent)</div>
+          <div class="help-item"><code>/unban [@user]</code> — رفع الحظر</div>
+          <div class="help-item"><code>/stats</code> — إحصائيات عامة للسيرفر</div>
+          <div class="help-item"><code>/leaderboard</code> — لوحة المتصدرين (إجمالي أو أسبوعي)</div>
+          <div class="help-item"><code>/prints [@user]</code> — نقاط عضو معين مع الرتبة والستريك</div>
+          <div class="help-item"><code>/ticket add [@user]</code> — إضافة مستخدم للتذكرة الحالية</div>
+          <div class="help-item"><code>/ticket remove [@user]</code> — إزالة مستخدم من التذكرة</div>
+          <div class="help-item"><code>/ticket priority [مستوى]</code> — تعيين أولوية التذكرة (منخفضة/عادية/عالية/عاجلة)</div>
+          <div class="help-item"><code>/ticket transfer [@staff]</code> — نقل التذكرة لعضو دعم آخر</div>
+          <div class="help-item"><code>/ticket note [نص]</code> — إضافة ملاحظة داخلية مرئية للدعم فقط</div>
+        </div>
+      </div>
+
+      <!-- Points & Ranks -->
+      <div class="card help-section" data-tags="نقاط رتبة مبتدئ نشيط محترف خبير أسطورة ستريك setrank">
+        <div class="card-header"><div class="card-title">⭐ نظام النقاط والرتب</div></div>
+        <div style="padding:16px">
+          <table style="width:100%;border-collapse:collapse">
+            <thead>
+              <tr style="border-bottom:1px solid var(--border)">
+                <th style="text-align:right;padding:8px;color:var(--text-muted)">الرتبة</th>
+                <th style="text-align:right;padding:8px;color:var(--text-muted)">النقاط المطلوبة</th>
+                <th style="text-align:right;padding:8px;color:var(--text-muted)">كيف تصل إليها؟</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px">🌱 مبتدئ</td><td style="padding:8px;color:var(--text-muted)">0+</td><td style="padding:8px;font-size:13px;color:var(--text-muted)">تلقائي عند الانضمام للدعم</td></tr>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px">⚡ نشيط</td><td style="padding:8px;color:var(--accent)">100</td><td style="padding:8px;font-size:13px;color:var(--text-muted)">أغلق ~10 تذاكر أو ردّ بسرعة</td></tr>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px">🌟 محترف</td><td style="padding:8px;color:var(--accent)">300</td><td style="padding:8px;font-size:13px;color:var(--text-muted)">~30 تذكرة أو ستريك مستمر</td></tr>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px">💎 خبير</td><td style="padding:8px;color:var(--accent)">700</td><td style="padding:8px;font-size:13px;color:var(--text-muted)">~70 تذكرة مع ردود سريعة</td></tr>
+              <tr><td style="padding:8px">🏆 أسطورة</td><td style="padding:8px;color:var(--warning)">1500</td><td style="padding:8px;font-size:13px;color:var(--text-muted)">عضو دعم استثنائي</td></tr>
+            </tbody>
+          </table>
+          <div style="margin-top:16px;padding:12px;background:var(--bg3);border-radius:8px;font-size:13px">
+            <strong>كيف تُكسب النقاط؟</strong><br>
+            🎫 إغلاق تذكرة = <strong>+10 نقاط</strong> + مكافأة ستريك<br>
+            ⚡ الرد السريع (أقل من دقيقة) = <strong>+5 نقاط</strong> إضافية<br>
+            🔥 ستريك يومي = <strong>+2 نقطة إضافية</strong> لكل يوم متتالي<br><br>
+            <strong>🆕 تعيين الرتبة مباشرة:</strong> استخدم <code>/setrank</code> أو زر 🏅 بجانب كل عضو في قسم فريق الدعم
+          </div>
+        </div>
+      </div>
+
+      <!-- Auto Reply -->
+      <div class="card help-section" data-tags="رد تلقائي كلمة مفتاحية keyword رتبة trigger">
+        <div class="card-header"><div class="card-title">💬 الردود التلقائية</div></div>
+        <div style="padding:16px;font-size:14px;display:flex;flex-direction:column;gap:12px">
+          <div>
+            <strong>كيف تضيف رد تلقائي؟</strong><br>
+            اذهب لـ <em>الردود التلقائية</em> ← إضافة رد ← أدخل الكلمة والرد
+          </div>
+          <div>
+            <strong>أنواع المطابقة:</strong><br>
+            • <code>يحتوي على</code> — الرسالة تحتوي الكلمة في أي مكان ✅ (الأكثر مرونة)<br>
+            • <code>تطابق كامل</code> — الرسالة هي الكلمة بالضبط<br>
+            • <code>يبدأ بـ</code> — الرسالة تبدأ بالكلمة
+          </div>
+          <div>
+            <strong>🆕 تخصيص حسب الرتبة:</strong><br>
+            تقدر تحدد رتبة معينة تفعّل الرد التلقائي، أو تخلّيه يعمل مع أي شخص<br>
+            مثال: رد تلقائي يظهر فقط لو كاتب الرسالة عنده رتبة معينة
+          </div>
+          <div style="padding:12px;background:var(--accent-bg);border-radius:8px;border:1px solid var(--accent)">
+            <strong>⚠️ ملاحظة مهمة:</strong> الردود التلقائية تعمل فقط <strong>داخل قنوات التذاكر المفتوحة</strong>، ولا تعمل في القنوات العادية
+          </div>
+        </div>
+      </div>
+
+      <!-- Setup Guide -->
+      <div class="card help-section" data-tags="إعداد تثبيت setup أول مرة بدء">
+        <div class="card-header"><div class="card-title">🚀 دليل الإعداد الأول</div></div>
+        <div style="padding:16px">
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div style="display:flex;gap:12px;align-items:flex-start">
+              <div style="width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">1</div>
+              <div><strong>أضف البوت للسيرفر</strong> مع صلاحيات: Manage Channels، Send Messages، Read Message History، Manage Roles، View Audit Log</div>
+            </div>
+            <div style="display:flex;gap:12px;align-items:flex-start">
+              <div style="width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">2</div>
+              <div><strong>الإعدادات</strong> — في تبويب الإعدادات، حدد قناة السجلات وأضف رتبة فريق الدعم (staff_role_id)</div>
+            </div>
+            <div style="display:flex;gap:12px;align-items:flex-start">
+              <div style="width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">3</div>
+              <div><strong>إنشاء لوحة</strong> — استخدم <code>/panel create name:اسم_اللوحة</code> أو من لوحة التحكم</div>
+            </div>
+            <div style="display:flex;gap:12px;align-items:flex-start">
+              <div style="width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">4</div>
+              <div><strong>إرسال اللوحة</strong> — <code>/panel send panel_id:1</code> في القناة التي تريد فتح التذاكر منها</div>
+            </div>
+            <div style="display:flex;gap:12px;align-items:flex-start">
+              <div style="width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">5</div>
+              <div><strong>إضافة فريق الدعم</strong> — <code>/staff add @عضو</code> أو من قسم فريق الدعم في لوحة التحكم</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Common Errors -->
+      <div class="card help-section" data-tags="خطأ error مشكلة صلاحيات لوحة تذكرة">
+        <div class="card-header"><div class="card-title">🔧 الأخطاء الشائعة وحلولها</div></div>
+        <div style="padding:16px;display:flex;flex-direction:column;gap:16px">
+
+          <div style="padding:14px;background:var(--bg3);border-radius:8px;border-right:3px solid var(--danger)">
+            <strong style="color:var(--danger)">❌ "لوحة غير موجودة. تأكد من الرقم أو المعرف"</strong><br>
+            <div style="font-size:13px;margin-top:6px;color:var(--text-muted)">
+              الحل: استخدم <code>/panel list</code> واستخدم الرقم الظاهر (مثال: 1، 2، 3)، أو انسخ المعرف (UUID) كاملاً
+            </div>
+          </div>
+
+          <div style="padding:14px;background:var(--bg3);border-radius:8px;border-right:3px solid var(--danger)">
+            <strong style="color:var(--danger)">❌ "فشل تغيير الاسم. تأكد من صلاحيات البوت"</strong><br>
+            <div style="font-size:13px;margin-top:6px;color:var(--text-muted)">
+              الحل: تأكد أن رتبة البوت في السيرفر فوق قنوات التذاكر، وأن لديه صلاحية Manage Channels
+            </div>
+          </div>
+
+          <div style="padding:14px;background:var(--bg3);border-radius:8px;border-right:3px solid var(--warning)">
+            <strong style="color:var(--warning)">⚠️ الرد التلقائي لا يعمل</strong><br>
+            <div style="font-size:13px;margin-top:6px;color:var(--text-muted)">
+              الحل: تأكد أن الكلمة المفتاحية مضافة من تبويب "الردود التلقائية"، والرد التلقائي يعمل فقط داخل قنوات التذاكر
+            </div>
+          </div>
+
+          <div style="padding:14px;background:var(--bg3);border-radius:8px;border-right:3px solid var(--warning)">
+            <strong style="color:var(--warning)">⚠️ أعضاء الدعم لا يرون التذاكر</strong><br>
+            <div style="font-size:13px;margin-top:6px;color:var(--text-muted)">
+              الحل: أضف رتبة فريق الدعم في الإعدادات (staff_role_id)، أو أضف الأعضاء يدوياً بـ <code>/staff add</code>
+            </div>
+          </div>
+
+          <div style="padding:14px;background:var(--bg3);border-radius:8px;border-right:3px solid var(--warning)">
+            <strong style="color:var(--warning)">⚠️ البوت لا يرد على الأوامر</strong><br>
+            <div style="font-size:13px;margin-top:6px;color:var(--text-muted)">
+              الحل: تأكد أن <code>GUILD_ID</code> في ملف .env صحيح، وأن الأوامر مسجلة (تظهر في Discord عند كتابة /)
+            </div>
+          </div>
+
+          <div style="padding:14px;background:var(--bg3);border-radius:8px;border-right:3px solid var(--warning)">
+            <strong style="color:var(--warning)">⚠️ التذاكر لا تنتقل للتصنيف عند الإغلاق</strong><br>
+            <div style="font-size:13px;margin-top:6px;color:var(--text-muted)">
+              الحل: تأكد من تحديد category_close في إعدادات اللوحة، وأن البوت لديه صلاحية Manage Channels
+            </div>
+          </div>
+
+          <div style="padding:14px;background:var(--bg3);border-radius:8px;border-right:3px solid var(--success)">
+            <strong style="color:var(--success)">✅ لم تجد حلاً؟</strong><br>
+            <div style="font-size:13px;margin-top:6px;color:var(--text-muted)">
+              راجع console.log في الخادم — كل خطأ يُسجَّل تلقائياً مع التفاصيل. ابحث عن [Error] أو [Interaction]
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- .env reference -->
+      <div class="card help-section" data-tags="env متغيرات بيئة token client guild supabase">
+        <div class="card-header"><div class="card-title">🔑 متغيرات البيئة (.env)</div></div>
+        <div style="padding:16px">
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead>
+              <tr style="border-bottom:1px solid var(--border)">
+                <th style="text-align:right;padding:8px;color:var(--text-muted)">المتغير</th>
+                <th style="text-align:right;padding:8px;color:var(--text-muted)">الوصف</th>
+                <th style="text-align:right;padding:8px;color:var(--text-muted)">أين تجده؟</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px"><code>TOKEN</code></td><td style="padding:8px;color:var(--text-muted)">توكن البوت</td><td style="padding:8px;color:var(--text-muted)">Discord Developer Portal → Bot</td></tr>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px"><code>CLIENT_ID</code></td><td style="padding:8px;color:var(--text-muted)">معرف التطبيق</td><td style="padding:8px;color:var(--text-muted)">Developer Portal → General Information</td></tr>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px"><code>GUILD_ID</code></td><td style="padding:8px;color:var(--text-muted)">معرف السيرفر</td><td style="padding:8px;color:var(--text-muted)">كليك يمين على السيرفر → Copy Server ID</td></tr>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px"><code>SUPABASE_URL</code></td><td style="padding:8px;color:var(--text-muted)">رابط قاعدة البيانات</td><td style="padding:8px;color:var(--text-muted)">Supabase → Project Settings → API</td></tr>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px"><code>SUPABASE_KEY</code></td><td style="padding:8px;color:var(--text-muted)">مفتاح Supabase</td><td style="padding:8px;color:var(--text-muted)">Supabase → Project Settings → API (anon key)</td></tr>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px"><code>CLIENT_SECRET</code></td><td style="padding:8px;color:var(--text-muted)">سر تسجيل الدخول</td><td style="padding:8px;color:var(--text-muted)">Developer Portal → OAuth2</td></tr>
+              <tr><td style="padding:8px"><code>SESSION_SECRET</code></td><td style="padding:8px;color:var(--text-muted)">كلمة سر الجلسة</td><td style="padding:8px;color:var(--text-muted)">أي نص عشوائي طويل</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div><!-- #help-content -->
   </div>
 </div>
 
@@ -1366,6 +1599,44 @@
 </div>
 
 <!-- ══════════════════════════════════════════════════════════
+     MODAL: SET RANK
+═══════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-set-rank">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <div class="modal-title">🏅 تعيين رتبة</div>
+      <button class="modal-close" onclick="closeModal('modal-set-rank')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>العضو</label>
+          <div id="set-rank-user-name" style="padding:10px 14px;background:var(--bg3);border-radius:8px;font-weight:600;color:var(--text)">—</div>
+          <input type="hidden" id="set-rank-user-id">
+        </div>
+        <div class="form-group">
+          <label>الرتبة الجديدة</label>
+          <select id="set-rank-value" style="font-size:15px">
+            <option value="مبتدئ">🌱 مبتدئ — 0 نقطة</option>
+            <option value="نشيط">⚡ نشيط — 100 نقطة</option>
+            <option value="محترف">🌟 محترف — 300 نقطة</option>
+            <option value="خبير">💎 خبير — 700 نقطة</option>
+            <option value="أسطورة">🏆 أسطورة — 1500 نقطة</option>
+          </select>
+        </div>
+        <div style="padding:10px 14px;background:var(--accent-bg);border-radius:8px;font-size:13px;color:var(--text-muted)">
+          ⚠️ سيتم تعيين نقاط العضو مباشرة للحد الأدنى للرتبة المختارة
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="submitSetRank()">✅ تعيين الرتبة</button>
+      <button class="btn btn-ghost" onclick="closeModal('modal-set-rank')">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
      MODAL: ADD KEYWORD
 ═══════════════════════════════════════════════════════════ -->
 <div class="modal-overlay" id="modal-add-keyword">
@@ -1402,6 +1673,18 @@
               <% }) %>
             </select>
           </div>
+        </div>
+        <div class="form-group">
+          <label>تفعيل بواسطة (اختياري) 🎭</label>
+          <select id="kw-trigger-role">
+            <option value="">🌐 أي شخص</option>
+            <% (guildRoles || []).forEach(r => { %>
+              <option value="<%= r.id %>"><%= r.name %></option>
+            <% }) %>
+          </select>
+          <small style="color:var(--text-muted);font-size:11px;margin-top:4px;display:block">
+            إذا اخترت رتبة، فقط أصحاب هذه الرتبة سيفعّلون الرد التلقائي
+          </small>
         </div>
         <label style="display:flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0;font-size:13px;font-weight:500;cursor:pointer">
           <input type="checkbox" id="kw-case-sensitive"> حساس لحالة الأحرف
@@ -1899,17 +2182,47 @@ async function addKeyword() {
   if (!keyword || !response) return toast('أدخل الكلمة والرد', 'error');
   try {
     await api('POST', '/api/keyword', {
-      guild_id:       GUILD_ID,
-      panel_id:       document.getElementById('kw-panel-id')?.value || null,
+      guild_id:        GUILD_ID,
+      panel_id:        document.getElementById('kw-panel-id')?.value || null,
       keyword,
       response,
-      match_type:     document.getElementById('kw-match-type')?.value     || 'contains',
-      case_sensitive: document.getElementById('kw-case-sensitive')?.checked ? 'true' : 'false',
+      match_type:      document.getElementById('kw-match-type')?.value     || 'contains',
+      case_sensitive:  document.getElementById('kw-case-sensitive')?.checked ? 'true' : 'false',
+      trigger_role_id: document.getElementById('kw-trigger-role')?.value   || null,
     });
     toast('تمت إضافة الرد التلقائي ✅', 'success');
     closeModal('modal-add-keyword');
     setTimeout(() => location.reload(), 800);
   } catch (err) { toast(err.message, 'error'); }
+}
+
+// ─── SET RANK ────────────────────────────────────────────────
+function openSetRankModal(userId, displayName) {
+  document.getElementById('set-rank-user-id').value = userId;
+  document.getElementById('set-rank-user-name').textContent = displayName;
+  openModal('modal-set-rank');
+}
+
+async function submitSetRank() {
+  const userId = document.getElementById('set-rank-user-id')?.value;
+  const rank   = document.getElementById('set-rank-value')?.value;
+  if (!userId || !rank) return toast('خطأ في البيانات', 'error');
+  try {
+    const res = await api('POST', `/api/guild/${GUILD_ID}/set-rank`, { user_id: userId, rank });
+    toast(`✅ تم تعيين رتبة "${rank}" بنجاح (${res.afterPoints} نقطة)`, 'success');
+    closeModal('modal-set-rank');
+    setTimeout(() => location.reload(), 900);
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+// ─── HELP SEARCH ─────────────────────────────────────────────
+function filterHelp(query) {
+  const q = query.toLowerCase().trim();
+  document.querySelectorAll('.help-section').forEach(sec => {
+    const tags = (sec.dataset.tags || '').toLowerCase();
+    const text = sec.textContent.toLowerCase();
+    sec.style.display = (!q || tags.includes(q) || text.includes(q)) ? '' : 'none';
+  });
 }
 
 async function deleteKeyword(id) {
