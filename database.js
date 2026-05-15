@@ -596,7 +596,7 @@ async function getNotes(ticketId) {
 // ════════════════════════════════════════════════════════════════════════════
 //  KEYWORDS
 // ════════════════════════════════════════════════════════════════════════════
-async function addKeyword(guildId, panelId, keyword, response, matchType = 'contains', caseSensitive = false) {
+async function addKeyword(guildId, panelId, keyword, response, matchType = 'contains', caseSensitive = false, triggerRoleId = null) {
   await ensureGuild(guildId);
   return handle(await supabase.from('keywords').insert({
     guild_id: guildId,
@@ -604,15 +604,46 @@ async function addKeyword(guildId, panelId, keyword, response, matchType = 'cont
     keyword,
     response,
     match_type: matchType,
-    case_sensitive: caseSensitive
+    case_sensitive: caseSensitive,
+    trigger_role_id: triggerRoleId || null,
+    enabled: true
   }).select().single());
 }
 
 async function getKeywords(guildId, panelId = null) {
   let q = supabase.from('keywords').select('*').eq('guild_id', guildId).eq('enabled', true);
   if (panelId) q = q.or(`panel_id.eq.${panelId},panel_id.is.null`);
+  else q = q.is('panel_id', null);
   const { data } = await q;
   return data || [];
+}
+
+// ─── Set user points to a specific rank's minimum threshold ──────────────────
+const RANK_THRESHOLDS = {
+  'مبتدئ':   0,
+  'نشيط':   100,
+  'محترف':  300,
+  'خبير':   700,
+  'أسطورة': 1500
+};
+
+async function setUserRankPoints(guildId, userId, rankName) {
+  const threshold = RANK_THRESHOLDS[rankName];
+  if (threshold === undefined) throw new Error(`رتبة غير معروفة: ${rankName}`);
+  await ensureGuild(guildId);
+  // Ensure staff row exists
+  await supabase.from('staff').upsert({
+    guild_id: guildId,
+    user_id: userId,
+    points_total: threshold,
+    points_weekly: threshold > 0 ? threshold : 0
+  }, { onConflict: 'guild_id,user_id', ignoreDuplicates: false });
+  const { data } = await supabase.from('staff')
+    .select('points_total')
+    .eq('guild_id', guildId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  return { afterPoints: data?.points_total || threshold };
 }
 
 async function getAllKeywords(guildId) {
@@ -747,6 +778,8 @@ module.exports = {
   addNote, getNotes,
   // Keywords
   addKeyword, getKeywords, getAllKeywords, deleteKeyword, incrementKeywordHit,
+  // Ranks
+  setUserRankPoints, RANK_THRESHOLDS,
   // Bans
   banUser, unbanUser, isBanned, getBans,
   // Transcripts

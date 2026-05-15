@@ -87,6 +87,9 @@ async function handleInteraction(interaction, client) {
     if (id.startsWith('ping_owner:'))      return handlePingOwner(interaction, client);
     if (id.startsWith('confirm_close:'))   return handleConfirmClose(interaction, client);
     if (id.startsWith('cancel_close:'))    return interaction.update({ components: [] });
+    if (id.startsWith('delete_ticket:'))   return handleDeleteTicket(interaction, client);
+    if (id.startsWith('confirm_delete:'))  return handleConfirmDelete(interaction, client);
+    if (id.startsWith('cancel_delete:'))   return interaction.update({ content: '↩️ تم إلغاء الحذف.', embeds: [], components: [] });
   }
 
   // ─── Modals ───────────────────────────────────────────────────────────
@@ -504,20 +507,46 @@ async function doClose(interaction, client, channelId, reason = null) {
     .setTimestamp();
   if (reason) embed.addFields({ name: 'سبب الإغلاق', value: reason });
 
-  const ratingRow = new ActionRowBuilder().addComponents(
-    new StringSelectMenuBuilder()
-      .setCustomId(`rating_select:${channelId}`)
-      .setPlaceholder(panel?.rating_placeholder || 'قيّم تجربتك (اختياري)')
-      .addOptions(
-        new StringSelectMenuOptionBuilder().setLabel('⭐ 1 - ضعيف').setValue('1'),
-        new StringSelectMenuOptionBuilder().setLabel('⭐⭐ 2 - مقبول').setValue('2'),
-        new StringSelectMenuOptionBuilder().setLabel('⭐⭐⭐ 3 - جيد').setValue('3'),
-        new StringSelectMenuOptionBuilder().setLabel('⭐⭐⭐⭐ 4 - ممتاز').setValue('4'),
-        new StringSelectMenuOptionBuilder().setLabel('⭐⭐⭐⭐⭐ 5 - رائع').setValue('5')
-      )
+  // ─── زر الحذف في القناة ───────────────────────────────────────────────
+  const deleteRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`delete_ticket:${channelId}`)
+      .setLabel('🗑️ حذف التذكرة')
+      .setStyle(ButtonStyle.Danger)
   );
 
-  await channel.send({ embeds: [embed], components: [ratingRow] });
+  await channel.send({ embeds: [embed], components: [deleteRow] });
+
+  // ─── إرسال التقييم على الخاص لصاحب التذكرة ──────────────────────────
+  try {
+    const ticketOwner = await client.users.fetch(ticket.user_id).catch(() => null);
+    if (ticketOwner) {
+      const dmEmbed = new EmbedBuilder()
+        .setColor('#f59e0b')
+        .setTitle('⭐ كيف كانت تجربتك معنا؟')
+        .setDescription(
+          `تم إغلاق تذكرتك **#${ticket.id}** في سيرفر **${interaction.guild.name}**.\n\n` +
+          `يسعدنا معرفة رأيك في الخدمة المقدمة — قيّم تجربتك من 1 إلى 5 نجوم:`
+        )
+        .setFooter({ text: 'SkyTicket • نظام التقييم' })
+        .setTimestamp();
+
+      const dmRatingRow = new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(`rating_select:${channelId}:${interaction.guild.id}`)
+          .setPlaceholder(panel?.rating_placeholder || 'قيّم تجربتك (اختياري)')
+          .addOptions(
+            new StringSelectMenuOptionBuilder().setLabel('⭐ 1 - ضعيف').setValue('1'),
+            new StringSelectMenuOptionBuilder().setLabel('⭐⭐ 2 - مقبول').setValue('2'),
+            new StringSelectMenuOptionBuilder().setLabel('⭐⭐⭐ 3 - جيد').setValue('3'),
+            new StringSelectMenuOptionBuilder().setLabel('⭐⭐⭐⭐ 4 - ممتاز').setValue('4'),
+            new StringSelectMenuOptionBuilder().setLabel('⭐⭐⭐⭐⭐ 5 - رائع').setValue('5')
+          )
+      );
+
+      await ticketOwner.send({ embeds: [dmEmbed], components: [dmRatingRow] }).catch(() => {});
+    }
+  } catch {}
 
   if (panel?.category_close) {
     await channel.setParent(panel.category_close, { lockPermissions: false }).catch(() => {});
@@ -541,8 +570,11 @@ async function doClose(interaction, client, channelId, reason = null) {
 //  RATING SELECT
 // ════════════════════════════════════════════════════════════════════════════
 async function handleRatingSelect(interaction, client) {
-  const channelId = interaction.customId.split(':')[1];
-  const ticket    = await db.getTicket(channelId);
+  const parts     = interaction.customId.split(':');
+  const channelId = parts[1];
+  const guildId   = parts[2] || interaction.guild?.id;
+
+  const ticket = await db.getTicket(channelId);
   if (!ticket) return interaction.update({ components: [] });
 
   if (interaction.user.id !== ticket.user_id)
@@ -553,7 +585,7 @@ async function handleRatingSelect(interaction, client) {
 
   // FIX: use updateStaffRating (not incrementStaffClosed) to avoid double-counting tickets_closed
   if (ticket.claimed_by) {
-    await db.updateStaffRating(interaction.guild.id, ticket.claimed_by, rating);
+    await db.updateStaffRating(guildId, ticket.claimed_by, rating);
   }
 
   const stars = '⭐'.repeat(rating);
@@ -562,13 +594,20 @@ async function handleRatingSelect(interaction, client) {
     .setDescription(`${stars} شكراً على تقييمك! **(${rating}/5)**\nتقييمك يساعدنا على تحسين خدمتنا.`);
 
   await interaction.update({ components: [] });
-  await interaction.channel.send({ embeds: [embed] });
+
+  // إذا كان في الخاص نرسل الشكر كرسالة جديدة، وإذا في القناة نرسل فيها
+  if (interaction.guild) {
+    await interaction.channel.send({ embeds: [embed] });
+  } else {
+    await interaction.followUp({ embeds: [embed] }).catch(() => {});
+  }
 
   // Send rating to the dedicated rating channel if configured
-  const guildData = await db.getGuild(interaction.guild.id);
+  const guildData = await db.getGuild(guildId);
   if (guildData?.rating_channel_id) {
     try {
-      const ratingCh = interaction.guild.channels.cache.get(guildData.rating_channel_id);
+      const guild    = client.guilds.cache.get(guildId);
+      const ratingCh = guild?.channels.cache.get(guildData.rating_channel_id);
       if (ratingCh) {
         const staffMention = ticket.claimed_by ? `<@${ticket.claimed_by}>` : '—';
         const logEmbed = new EmbedBuilder()
@@ -585,6 +624,57 @@ async function handleRatingSelect(interaction, client) {
       }
     } catch {}
   }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  DELETE TICKET
+// ════════════════════════════════════════════════════════════════════════════
+async function handleDeleteTicket(interaction, client) {
+  const channelId = interaction.customId.split(':')[1];
+  const ticket    = await db.getTicket(channelId);
+  if (!ticket) return interaction.reply({ content: '❌ التذكرة غير موجودة.', ephemeral: true });
+
+  const isStaff = await checkStaff(interaction.guild.id, interaction.member);
+  const isAdmin = interaction.member.permissions.has('Administrator');
+  if (!isStaff && !isAdmin)
+    return interaction.reply({ content: '❌ هذا الزر للدعم والإداريين فقط.', ephemeral: true });
+
+  const embed = new EmbedBuilder()
+    .setColor('#dc2626')
+    .setTitle('🗑️ تأكيد الحذف')
+    .setDescription('هل أنت متأكد من **حذف هذه القناة نهائياً**؟ لا يمكن التراجع عن هذا الإجراء.');
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`confirm_delete:${channelId}`)
+      .setLabel('نعم، احذف')
+      .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId(`cancel_delete:${channelId}`)
+      .setLabel('إلغاء')
+      .setStyle(ButtonStyle.Secondary)
+  );
+
+  return interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
+}
+
+async function handleConfirmDelete(interaction, client) {
+  const channelId = interaction.customId.split(':')[1];
+  const channel   = interaction.channel;
+
+  await interaction.update({
+    content: '🗑️ **سيتم حذف القناة خلال 3 ثواني...**',
+    embeds: [],
+    components: []
+  });
+
+  setTimeout(async () => {
+    try {
+      await channel.delete('حذف التذكرة بواسطة فريق الدعم');
+    } catch (e) {
+      console.error('[DeleteTicket]', e);
+    }
+  }, 3000);
 }
 
 // ─── Export ────────────────────────────────────────────────────────────────

@@ -82,6 +82,12 @@ client.on(Events.MessageCreate, async message => {
       const text    = kw.case_sensitive ? message.content : message.content.toLowerCase();
       const keyword = kw.case_sensitive ? kw.keyword      : kw.keyword.toLowerCase();
 
+      // Check role restriction
+      if (kw.trigger_role_id) {
+        const memberRoles = message.member?.roles?.cache;
+        if (!memberRoles?.has(kw.trigger_role_id)) continue;
+      }
+
       let matched = false;
       if      (kw.match_type === 'exact')       matched = text === keyword;
       else if (kw.match_type === 'starts_with') matched = text.startsWith(keyword);

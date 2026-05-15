@@ -303,6 +303,7 @@ CREATE TABLE IF NOT EXISTS keywords (
   case_sensitive  BOOLEAN DEFAULT false,
   enabled         BOOLEAN DEFAULT true,
   hit_count       INTEGER DEFAULT 0,
+  trigger_role_id TEXT DEFAULT NULL,
   created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -317,6 +318,7 @@ ALTER TABLE IF EXISTS keywords
   ADD COLUMN IF NOT EXISTS case_sensitive  BOOLEAN DEFAULT false,
   ADD COLUMN IF NOT EXISTS enabled         BOOLEAN DEFAULT true,
   ADD COLUMN IF NOT EXISTS hit_count       INTEGER DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS trigger_role_id TEXT DEFAULT NULL,
   ADD COLUMN IF NOT EXISTS created_at      TIMESTAMPTZ DEFAULT NOW();
 
 -- ==============================================================

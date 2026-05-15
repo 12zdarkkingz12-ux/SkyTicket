@@ -155,6 +155,23 @@ const commands = [
       .setDescription('إضافة ملاحظة داخلية (مرئية للدعم فقط)')
       .addStringOption(o => o.setName('text').setDescription('نص الملاحظة').setRequired(true))),
 
+  // ─── /setrank ─────────────────────────────────────────────────────────────
+  new SlashCommandBuilder()
+    .setName('setrank')
+    .setDescription('تعيين رتبة كاملة لعضو في نظام النقاط')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addUserOption(o => o.setName('user').setDescription('العضو').setRequired(true))
+    .addStringOption(o => o.setName('rank')
+      .setDescription('الرتبة المطلوبة')
+      .setRequired(true)
+      .addChoices(
+        { name: '🌱 مبتدئ   (0 نقطة)',    value: 'مبتدئ' },
+        { name: '⚡ نشيط   (100 نقطة)',   value: 'نشيط' },
+        { name: '🌟 محترف  (300 نقطة)',   value: 'محترف' },
+        { name: '💎 خبير   (700 نقطة)',   value: 'خبير' },
+        { name: '🏆 أسطورة (1500 نقطة)',  value: 'أسطورة' }
+      )),
+
 ].map(c => c.toJSON());
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -457,7 +474,6 @@ async function handleCommand(interaction, client) {
       const staffCheck = await db.isStaff(interaction.guild.id, interaction.user.id);
       const isAdmin    = interaction.member.permissions.has('Administrator');
       if (!staffCheck && !isAdmin) return interaction.reply({ content: '❌ هذا الأمر للدعم فقط.', ephemeral: true });
-
       const text = interaction.options.getString('text');
       await db.addNote(ticket.id, interaction.guild.id, interaction.user.id, text);
 
@@ -471,7 +487,37 @@ async function handleCommand(interaction, client) {
       return interaction.reply({ embeds: [embed] });
     }
   }
-}
+
+  // ─── /setrank ──────────────────────────────────────────────────────────
+  if (commandName === 'setrank') {
+    await interaction.deferReply({ ephemeral: true });
+
+    const target   = interaction.options.getUser('user');
+    const rankName = interaction.options.getString('rank');
+    const threshold = db.RANK_THRESHOLDS[rankName];
+    const rankEmojis = { 'مبتدئ': '🌱', 'نشيط': '⚡', 'محترف': '🌟', 'خبير': '💎', 'أسطورة': '🏆' };
+
+    try {
+      // Ensure user is in staff table
+      await db.addStaff(interaction.guild.id, target.id, interaction.user.id).catch(() => {});
+      const result = await db.setUserRankPoints(interaction.guild.id, target.id, rankName);
+
+      const embed = new EmbedBuilder()
+        .setColor('#22c55e')
+        .setTitle('✅ تم تعيين الرتبة')
+        .addFields(
+          { name: 'العضو',   value: `${target}`, inline: true },
+          { name: 'الرتبة الجديدة', value: `${rankEmojis[rankName]} ${rankName}`, inline: true },
+          { name: 'النقاط',  value: `${result.afterPoints}`, inline: true }
+        )
+        .setTimestamp();
+
+      await db.addLog(interaction.guild.id, 'RANK_SET', interaction.user.id, target.id, { rank: rankName, points: threshold });
+      return interaction.editReply({ embeds: [embed] });
+    } catch (err) {
+      return interaction.editReply({ content: `❌ خطأ: ${err.message}` });
+    }
+  }
 
 // ─── Send panel embed ─────────────────────────────────────────────────────────
 async function sendPanelEmbed(channel, panel, guild) {

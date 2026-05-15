@@ -272,27 +272,75 @@ app.get('/guild/:id', ensureAuth, ensureGuildAdminPage, async (req, res) => {
       .sort((a, b) => a.position - b.position)
       .map(ch => ({ id: ch.id, name: ch.name }));
 
+    // Collect all user IDs we need to resolve
+    const allUserIds = new Set([
+      ...staffList.map(s => s.user_id),
+      ...bans.map(b => [b.user_id, b.banned_by]).flat().filter(Boolean),
+      ...logs.map(l => [l.actor_id, l.target_id]).flat().filter(Boolean)
+    ]);
+
+    // Fetch unknown members from Discord
+    for (const uid of allUserIds) {
+      if (!guild.members.cache.has(uid)) {
+        await guild.members.fetch(uid).catch(() => {});
+      }
+    }
+
+    // Helper to get display name
+    const resolveName = (uid) => {
+      if (!uid) return null;
+      const m = guild.members.cache.get(uid);
+      return m?.displayName || m?.user?.username || uid;
+    };
+
     // Resolve usernames from Discord cache for tickets
     const enriched = allTickets.slice(0, 100).map(t => ({
       ...t,
-      userTag:  guild.members.cache.get(t.user_id)?.user?.tag  || t.user_id,
-      staffTag: t.claimed_by ? guild.members.cache.get(t.claimed_by)?.user?.tag || t.claimed_by : null,
+      userTag:   resolveName(t.user_id)  || t.user_id,
+      staffTag:  t.claimed_by ? (resolveName(t.claimed_by) || t.claimed_by) : null,
       panelName: panels.find(p => p.id === t.panel_id)?.name || '—'
     }));
+
+    // Enrich staff with display names
+    const enrichedStaff = staffList.map(s => ({
+      ...s,
+      displayName: resolveName(s.user_id) || s.user_id
+    }));
+
+    // Enrich bans with display names
+    const enrichedBans = bans.map(b => ({
+      ...b,
+      displayName:   resolveName(b.user_id)  || b.user_id,
+      bannedByName:  resolveName(b.banned_by) || b.banned_by || '—'
+    }));
+
+    // Enrich logs with display names
+    const enrichedLogs = logs.map(l => ({
+      ...l,
+      actorName:  resolveName(l.actor_id)  || l.actor_id  || '—',
+      targetName: resolveName(l.target_id) || l.target_id || '—'
+    }));
+
+    // Get guild roles for keyword trigger selector
+    const guildRoles = guild.roles.cache
+      .filter(r => !r.managed && r.id !== guild.id)
+      .sort((a, b) => b.position - a.position)
+      .map(r => ({ id: r.id, name: r.name }));
 
     res.render('guild_dashboard', {
       user:      req.user,
       guild:     { id: guild.id, name: guild.name, icon: guild.iconURL({ dynamic: true }) },
       guildData,
       panels,
-      staff:     staffList,
+      staff:     enrichedStaff,
       keywords,
       tickets:   enriched,
-      bans,
-      logs,
+      bans:      enrichedBans,
+      logs:      enrichedLogs,
       stats,
       promotionRules,
-      categoryChannels
+      categoryChannels,
+      guildRoles
     });
   } catch (err) {
     console.error('[Dashboard]', err);
@@ -443,8 +491,8 @@ app.delete('/api/staff/:userId/:guildId', ensureAuth, ensureGuildAdmin, async (r
 // ════════════════════════════════════════════════════════════════════════════
 app.post('/api/keyword', ensureAuth, ensureGuildAdmin, async (req, res) => {
   try {
-    const { guild_id, panel_id, keyword, response, match_type, case_sensitive } = req.body;
-    const kw = await db.addKeyword(guild_id, panel_id || null, keyword, response, match_type || 'contains', case_sensitive === 'true');
+    const { guild_id, panel_id, keyword, response, match_type, case_sensitive, trigger_role_id } = req.body;
+    const kw = await db.addKeyword(guild_id, panel_id || null, keyword, response, match_type || 'contains', case_sensitive === 'true', trigger_role_id || null);
     res.json({ success: true, keyword: kw });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -541,6 +589,21 @@ app.delete('/api/guild/:guildId/promotion-rules/:ruleId', ensureAuth, ensureGuil
     await db.deletePromotionRule(req.params.ruleId);
     await db.addLog(req.params.guildId, 'PROMOTION_RULE_DELETE', req.user.id, null, { rule_id: req.params.ruleId });
     res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+//  API — SET RANK
+// ════════════════════════════════════════════════════════════════════════════
+app.post('/api/guild/:guildId/set-rank', ensureAuth, ensureGuildAdmin, async (req, res) => {
+  try {
+    const { user_id, rank } = req.body;
+    if (!user_id || !rank) return res.status(400).json({ error: 'user_id و rank مطلوبان' });
+    // Ensure staff row
+    await db.addStaff(req.params.guildId, user_id, req.user.id).catch(() => {});
+    const result = await db.setUserRankPoints(req.params.guildId, user_id, rank);
+    await db.addLog(req.params.guildId, 'RANK_SET', req.user.id, user_id, { rank, points: result.afterPoints });
+    res.json({ success: true, afterPoints: result.afterPoints });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
