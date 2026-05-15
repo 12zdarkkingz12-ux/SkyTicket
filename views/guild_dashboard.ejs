@@ -11,8 +11,6 @@
 </head>
 <body>
 
-<div class="sidebar-overlay" id="sidebar-overlay" aria-hidden="true" onclick="closeSidebar()"></div>
-
 <!-- ══════════════════════════════════════════════════════════
      DATA  (server → client)
 ═══════════════════════════════════════════════════════════ -->
@@ -113,16 +111,14 @@
   }
 </script>
 
+<div class="sidebar-backdrop" id="sidebar-backdrop" aria-hidden="true"></div>
+
 <div class="layout">
 
 <!-- ══════════════════════════════════════════════════════════
      SIDEBAR
 ═══════════════════════════════════════════════════════════ -->
-<nav class="sidebar">
-
-  <div class="sidebar-mobile-header">
-    <button type="button" class="sidebar-close" aria-label="Close sidebar" onclick="closeSidebar()">✕</button>
-  </div>
+<nav class="sidebar" id="guild-sidebar">
 
   <div class="sidebar-brand">
     <a href="#" class="brand-logo">
@@ -218,20 +214,8 @@
 <!-- ══════════════════════════════════════════════════════════
      MAIN CONTENT
 ═══════════════════════════════════════════════════════════ -->
-<div class="mobile-topbar">
-  <button type="button" class="sidebar-toggle" aria-label="Menu" onclick="toggleSidebar()">
-    <span></span><span></span><span></span>
-  </button>
-  <div class="mobile-topbar-brand">
-    <span class="mobile-topbar-logo"><img src="/logo.png?v=<%= assetVersion %>" alt="SkyTicket" onerror="this.style.display='none'"></span>
-    <div class="mobile-topbar-text">
-      <strong>SkyTicket</strong>
-      <span><%= guild.name %></span>
-    </div>
-  </div>
-</div>
-
 <main class="main">
+  <button type="button" class="sidebar-toggle btn btn-ghost btn-icon" id="sidebar-toggle" aria-controls="guild-sidebar" aria-expanded="false" aria-label="فتح القائمة">☰</button>
 
 <!-- ──────────────────────────────────────────────────────────
      TAB: OVERVIEW
@@ -1417,18 +1401,38 @@
      JAVASCRIPT
 ═══════════════════════════════════════════════════════════ -->
 <script>
-// ─── Sidebar Drawer ───────────────────────────────────────────
-function isMobileSidebar() {
-  return window.matchMedia('(max-width: 768px)').matches;
-}
+const sidebarToggle = document.getElementById('sidebar-toggle');
+const sidebarBackdrop = document.getElementById('sidebar-backdrop');
+const sidebar = document.getElementById('guild-sidebar');
 
 function setSidebarOpen(open) {
-  document.body.classList.toggle('sidebar-open', !!open);
+  document.body.classList.toggle('sidebar-open', open);
+  if (sidebarToggle) sidebarToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
 }
 
-function openSidebar() { setSidebarOpen(true); }
-function closeSidebar() { setSidebarOpen(false); }
-function toggleSidebar() { setSidebarOpen(!document.body.classList.contains('sidebar-open')); }
+if (sidebarToggle) {
+  sidebarToggle.addEventListener('click', () => {
+    setSidebarOpen(!document.body.classList.contains('sidebar-open'));
+  });
+}
+
+if (sidebarBackdrop) {
+  sidebarBackdrop.addEventListener('click', () => setSidebarOpen(false));
+}
+
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') setSidebarOpen(false);
+});
+
+window.addEventListener('resize', () => {
+  if (window.innerWidth > 900) setSidebarOpen(false);
+});
+
+document.querySelectorAll('.sidebar a, .sidebar .nav-item[data-tab]').forEach(el => {
+  el.addEventListener('click', () => {
+    if (window.innerWidth <= 900) setSidebarOpen(false);
+  });
+});
 
 // ─── Tab Navigation ──────────────────────────────────────────
 function showTab(name) {
@@ -1438,19 +1442,10 @@ function showTab(name) {
   if (tab) tab.classList.add('active');
   const nav = document.querySelector(`[data-tab="${name}"]`);
   if (nav) nav.classList.add('active');
-  if (isMobileSidebar()) closeSidebar();
 }
 
 document.querySelectorAll('.nav-item[data-tab]').forEach(item => {
   item.addEventListener('click', () => showTab(item.dataset.tab));
-});
-
-document.getElementById('sidebar-overlay')?.addEventListener('click', closeSidebar);
-window.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') closeSidebar();
-});
-window.addEventListener('resize', () => {
-  if (!isMobileSidebar()) closeSidebar();
 });
 
 // ─── Modals ───────────────────────────────────────────────────
@@ -1924,7 +1919,6 @@ async function refreshStats() {
 
 // ─── INIT ─────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  closeSidebar();
   loadDropdowns();
   animateCounters();
   initCharts();
