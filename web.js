@@ -256,14 +256,15 @@ app.get('/guild/:id', ensureAuth, ensureGuildAdminPage, async (req, res) => {
   try {
     const guild     = req.guild;
     const guildData = await db.getGuild(guild.id) || {};
-    const [panels, staffList, keywords, allTickets, bans, logs, stats] = await Promise.all([
+    const [panels, staffList, keywords, allTickets, bans, logs, stats, promotionRules] = await Promise.all([
       db.getPanels(guild.id),
       db.getStaff(guild.id),
       db.getAllKeywords(guild.id),
       db.getTicketsByGuild(guild.id),
       db.getBans(guild.id),
       db.getLogs(guild.id, 50),
-      db.getGuildStats(guild.id)
+      db.getGuildStats(guild.id),
+      db.getPromotionRules(guild.id)
     ]);
 
     const categoryChannels = guild.channels.cache
@@ -290,6 +291,7 @@ app.get('/guild/:id', ensureAuth, ensureGuildAdminPage, async (req, res) => {
       bans,
       logs,
       stats,
+      promotionRules,
       categoryChannels
     });
   } catch (err) {
@@ -351,7 +353,8 @@ app.post('/api/panel', ensureAuth, ensureGuildAdmin, async (req, res) => {
 
 app.put('/api/panel/:panelId', ensureAuth, async (req, res) => {
   try {
-    const panel = await db.getPanel(req.params.panelId);
+    let panel = await db.getPanel(req.params.panelId);
+    if (!panel) panel = await db.getPanelByRef(req.body.guild_id || req.params.guildId || req.params.id || null, req.params.panelId);
     if (!panel) return res.status(404).json({ error: 'اللوحة غير موجودة' });
 
     // Verify admin on that guild
@@ -376,7 +379,8 @@ app.put('/api/panel/:panelId', ensureAuth, async (req, res) => {
 
 app.delete('/api/panel/:panelId', ensureAuth, async (req, res) => {
   try {
-    const panel = await db.getPanel(req.params.panelId);
+    let panel = await db.getPanel(req.params.panelId);
+    if (!panel) panel = await db.getPanelByRef(req.body.guild_id || req.params.guildId || req.params.id || null, req.params.panelId);
     if (!panel) return res.status(404).json({ error: 'اللوحة غير موجودة' });
 
     const { client } = require('./bot');
@@ -393,7 +397,8 @@ app.delete('/api/panel/:panelId', ensureAuth, async (req, res) => {
 // Send panel to a channel
 app.post('/api/panel/:panelId/send', ensureAuth, async (req, res) => {
   try {
-    const panel  = await db.getPanel(req.params.panelId);
+    let panel  = await db.getPanel(req.params.panelId);
+    if (!panel) panel = await db.getPanelByRef(req.body.guild_id || req.params.guildId || req.params.id || null, req.params.panelId);
     if (!panel) return res.status(404).json({ error: 'اللوحة غير موجودة' });
 
     const { client } = require('./bot');
@@ -491,7 +496,8 @@ app.delete('/api/ban/:guildId/:userId', ensureAuth, ensureGuildAdmin, async (req
 app.post('/api/guild/:guildId/settings', ensureAuth, ensureGuildAdmin, async (req, res) => {
   try {
     const allowed = ['max_tickets_per_user','auto_close_hours','auto_close_warn_hours',
-                     'log_channel_id','dm_transcript','ping_on_open','require_close_reason','ticket_prefix'];
+                     'log_channel_id','dm_transcript','ping_on_open','require_close_reason',
+                     'ticket_prefix','rating_channel_id','staff_role_id','promotion_role_id','promotion_channel_id'];
     const updates = {};
     allowed.forEach(k => {
       if (req.body[k] !== undefined) {
@@ -504,6 +510,36 @@ app.post('/api/guild/:guildId/settings', ensureAuth, ensureGuildAdmin, async (re
     });
     await db.updateGuildSettings(req.params.guildId, updates);
     await db.addLog(req.params.guildId, 'SETTINGS_UPDATE', req.user.id, null, updates);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+//  API — PROMOTION RULES
+// ════════════════════════════════════════════════════════════════════════════
+app.get('/api/guild/:guildId/promotion-rules', ensureAuth, ensureGuildAdmin, async (req, res) => {
+  try {
+    res.json(await db.getPromotionRules(req.params.guildId));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/guild/:guildId/promotion-rules', ensureAuth, ensureGuildAdmin, async (req, res) => {
+  try {
+    const threshold = parseInt(req.body.threshold_points);
+    if (!Number.isFinite(threshold) || threshold <= 0) {
+      return res.status(400).json({ error: 'أدخل عدد نقاط صحيح' });
+    }
+    const label = (req.body.label || 'تنبيه ترقية').trim();
+    const rule = await db.addPromotionRule(req.params.guildId, threshold, label);
+    await db.addLog(req.params.guildId, 'PROMOTION_RULE_CREATE', req.user.id, null, { rule_id: rule.id, threshold });
+    res.json({ success: true, rule });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/guild/:guildId/promotion-rules/:ruleId', ensureAuth, ensureGuildAdmin, async (req, res) => {
+  try {
+    await db.deletePromotionRule(req.params.ruleId);
+    await db.addLog(req.params.guildId, 'PROMOTION_RULE_DELETE', req.user.id, null, { rule_id: req.params.ruleId });
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

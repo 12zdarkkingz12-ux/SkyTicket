@@ -16,6 +16,10 @@ CREATE TABLE IF NOT EXISTS guilds (
   auto_close_hours       INTEGER DEFAULT 72,
   auto_close_warn_hours  INTEGER DEFAULT 48,
   log_channel_id         TEXT,
+  rating_channel_id      TEXT,
+  staff_role_id          TEXT,
+  promotion_role_id      TEXT,
+  promotion_channel_id   TEXT,
   dm_transcript          BOOLEAN DEFAULT false,
   ping_on_open           BOOLEAN DEFAULT true,
   require_close_reason   BOOLEAN DEFAULT false,
@@ -28,6 +32,10 @@ ALTER TABLE IF EXISTS guilds
   ADD COLUMN IF NOT EXISTS auto_close_hours       INTEGER DEFAULT 72,
   ADD COLUMN IF NOT EXISTS auto_close_warn_hours  INTEGER DEFAULT 48,
   ADD COLUMN IF NOT EXISTS log_channel_id         TEXT,
+  ADD COLUMN IF NOT EXISTS rating_channel_id      TEXT,
+  ADD COLUMN IF NOT EXISTS staff_role_id          TEXT,
+  ADD COLUMN IF NOT EXISTS promotion_role_id      TEXT,
+  ADD COLUMN IF NOT EXISTS promotion_channel_id   TEXT,
   ADD COLUMN IF NOT EXISTS dm_transcript          BOOLEAN DEFAULT false,
   ADD COLUMN IF NOT EXISTS ping_on_open           BOOLEAN DEFAULT true,
   ADD COLUMN IF NOT EXISTS require_close_reason   BOOLEAN DEFAULT false,
@@ -39,6 +47,7 @@ ALTER TABLE IF EXISTS guilds
 -- ==============================================================
 CREATE TABLE IF NOT EXISTS panels (
   id                   TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  panel_number         INTEGER,
   guild_id             TEXT REFERENCES guilds(id) ON DELETE CASCADE,
   name                 TEXT NOT NULL,
   description          TEXT DEFAULT 'افتح تذكرة للحصول على الدعم',
@@ -78,8 +87,10 @@ CREATE TABLE IF NOT EXISTS panels (
 );
 
 CREATE INDEX IF NOT EXISTS idx_panels_guild ON panels(guild_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_panels_guild_number ON panels(guild_id, panel_number);
 
 ALTER TABLE IF EXISTS panels
+  ADD COLUMN IF NOT EXISTS panel_number         INTEGER,
   ADD COLUMN IF NOT EXISTS description          TEXT DEFAULT 'افتح تذكرة للحصول على الدعم',
   ADD COLUMN IF NOT EXISTS category_open        TEXT,
   ADD COLUMN IF NOT EXISTS category_close       TEXT,
@@ -119,6 +130,9 @@ CREATE TABLE IF NOT EXISTS tickets (
   channel_id      TEXT UNIQUE NOT NULL,
   user_id         TEXT NOT NULL,
   claimed_by      TEXT,
+  claimed_at      TIMESTAMPTZ,
+  first_staff_reply_at TIMESTAMPTZ,
+  first_staff_reply_by  TEXT,
   status          TEXT DEFAULT 'open',
   priority        TEXT DEFAULT 'normal',
   open_reason     TEXT,
@@ -139,6 +153,9 @@ CREATE INDEX IF NOT EXISTS idx_tickets_last_activity  ON tickets(last_activity);
 
 ALTER TABLE IF EXISTS tickets
   ADD COLUMN IF NOT EXISTS claimed_by      TEXT,
+  ADD COLUMN IF NOT EXISTS claimed_at      TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS first_staff_reply_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS first_staff_reply_by  TEXT,
   ADD COLUMN IF NOT EXISTS status          TEXT DEFAULT 'open',
   ADD COLUMN IF NOT EXISTS priority        TEXT DEFAULT 'normal',
   ADD COLUMN IF NOT EXISTS open_reason     TEXT,
@@ -160,6 +177,14 @@ CREATE TABLE IF NOT EXISTS staff (
   available       BOOLEAN DEFAULT true,
   max_concurrent  INTEGER DEFAULT 10,
   tickets_closed  INTEGER DEFAULT 0,
+  points_total    INTEGER DEFAULT 0,
+  points_weekly   INTEGER DEFAULT 0,
+  streak_days     INTEGER DEFAULT 0,
+  best_streak     INTEGER DEFAULT 0,
+  last_point_date DATE,
+  avg_response_seconds INTEGER DEFAULT 0,
+  total_response_seconds BIGINT DEFAULT 0,
+  response_count  INTEGER DEFAULT 0,
   avg_rating      NUMERIC(3,2) DEFAULT 0,
   total_ratings   INTEGER DEFAULT 0,
   created_at      TIMESTAMPTZ DEFAULT NOW(),
@@ -173,9 +198,77 @@ ALTER TABLE IF EXISTS staff
   ADD COLUMN IF NOT EXISTS available       BOOLEAN DEFAULT true,
   ADD COLUMN IF NOT EXISTS max_concurrent  INTEGER DEFAULT 10,
   ADD COLUMN IF NOT EXISTS tickets_closed  INTEGER DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS points_total    INTEGER DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS points_weekly   INTEGER DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS streak_days     INTEGER DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS best_streak     INTEGER DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS last_point_date DATE,
+  ADD COLUMN IF NOT EXISTS avg_response_seconds INTEGER DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS total_response_seconds BIGINT DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS response_count  INTEGER DEFAULT 0,
   ADD COLUMN IF NOT EXISTS avg_rating      NUMERIC(3,2) DEFAULT 0,
   ADD COLUMN IF NOT EXISTS total_ratings   INTEGER DEFAULT 0,
   ADD COLUMN IF NOT EXISTS created_at      TIMESTAMPTZ DEFAULT NOW();
+
+-- ==============================================================
+-- PROMOTION RULES
+-- ==============================================================
+CREATE TABLE IF NOT EXISTS promotion_rules (
+  id               SERIAL PRIMARY KEY,
+  guild_id         TEXT REFERENCES guilds(id) ON DELETE CASCADE,
+  threshold_points INTEGER NOT NULL DEFAULT 0,
+  label            TEXT DEFAULT 'تنبيه ترقية',
+  enabled          BOOLEAN DEFAULT true,
+  created_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_promotion_rules_guild_threshold
+  ON promotion_rules(guild_id, threshold_points);
+
+ALTER TABLE IF EXISTS promotion_rules
+  ADD COLUMN IF NOT EXISTS threshold_points INTEGER DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS label            TEXT DEFAULT 'تنبيه ترقية',
+  ADD COLUMN IF NOT EXISTS enabled          BOOLEAN DEFAULT true,
+  ADD COLUMN IF NOT EXISTS created_at       TIMESTAMPTZ DEFAULT NOW();
+
+CREATE TABLE IF NOT EXISTS promotion_alerts (
+  id               SERIAL PRIMARY KEY,
+  guild_id         TEXT REFERENCES guilds(id) ON DELETE CASCADE,
+  user_id          TEXT NOT NULL,
+  rule_id          INTEGER REFERENCES promotion_rules(id) ON DELETE CASCADE,
+  points_at_trigger INTEGER DEFAULT 0,
+  notified_at      TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (guild_id, user_id, rule_id)
+);
+
+ALTER TABLE IF EXISTS promotion_alerts
+  ADD COLUMN IF NOT EXISTS points_at_trigger INTEGER DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS notified_at      TIMESTAMPTZ DEFAULT NOW();
+
+-- ==============================================================
+-- POINT EVENTS
+-- ==============================================================
+CREATE TABLE IF NOT EXISTS staff_point_events (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  guild_id    TEXT REFERENCES guilds(id) ON DELETE CASCADE,
+  user_id     TEXT NOT NULL,
+  ticket_id   INTEGER REFERENCES tickets(id) ON DELETE SET NULL,
+  source      TEXT NOT NULL,
+  points      INTEGER NOT NULL,
+  details     JSONB DEFAULT '{}'::jsonb,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_staff_points_guild ON staff_point_events(guild_id);
+CREATE INDEX IF NOT EXISTS idx_staff_points_user  ON staff_point_events(user_id);
+CREATE INDEX IF NOT EXISTS idx_staff_points_time  ON staff_point_events(created_at DESC);
+
+ALTER TABLE IF EXISTS staff_point_events
+  ADD COLUMN IF NOT EXISTS ticket_id   INTEGER,
+  ADD COLUMN IF NOT EXISTS source      TEXT DEFAULT 'manual',
+  ADD COLUMN IF NOT EXISTS points      INTEGER DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS details     JSONB DEFAULT '{}'::jsonb,
+  ADD COLUMN IF NOT EXISTS created_at  TIMESTAMPTZ DEFAULT NOW();
 
 -- ==============================================================
 -- TICKET NOTES
@@ -313,6 +406,7 @@ ALTER TABLE IF EXISTS panels       DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS tickets      DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS staff        DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS ticket_notes  DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS staff_point_events DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS keywords     DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS bans         DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS transcripts  DISABLE ROW LEVEL SECURITY;

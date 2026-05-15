@@ -13,6 +13,34 @@ function handle(result) {
   return result.data;
 }
 
+function getRiyadhDateKey(date = new Date()) {
+  // Riyadh = UTC+3, no DST.
+  return new Date(date.getTime() + 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+function getYesterdayKey(date = new Date()) {
+  return getRiyadhDateKey(new Date(date.getTime() - 24 * 60 * 60 * 1000));
+}
+
+function getResponsePoints(responseSeconds) {
+  if (responseSeconds == null || Number.isNaN(responseSeconds)) return 0;
+  if (responseSeconds <= 5 * 60) return 12;
+  if (responseSeconds <= 15 * 60) return 8;
+  if (responseSeconds <= 30 * 60) return 5;
+  if (responseSeconds <= 60 * 60) return 2;
+  return 1;
+}
+
+function getStreakBonus(streakDays) {
+  const bonuses = { 3: 5, 7: 15, 14: 30, 30: 60 };
+  return bonuses[streakDays] || 0;
+}
+
+function normalizePoints(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.floor(n) : 0;
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 //  SESSION STORE  (persistent sessions via Supabase)
 // ════════════════════════════════════════════════════════════════════════════
@@ -87,18 +115,104 @@ async function updateGuildSettings(guildId, settings) {
     .from('guilds').update(settings).eq('id', guildId));
 }
 
+async function getPromotionRules(guildId) {
+  const { data } = await supabase
+    .from('promotion_rules')
+    .select('*')
+    .eq('guild_id', guildId)
+    .order('threshold_points', { ascending: true });
+  return data || [];
+}
+
+async function addPromotionRule(guildId, thresholdPoints, label = 'تنبيه ترقية') {
+  await ensureGuild(guildId);
+  return handle(await supabase
+    .from('promotion_rules')
+    .upsert({
+      guild_id: guildId,
+      threshold_points: normalizePoints(thresholdPoints),
+      label: label || 'تنبيه ترقية'
+    }, { onConflict: 'guild_id,threshold_points' })
+    .select()
+    .single());
+}
+
+async function deletePromotionRule(ruleId) {
+  return handle(await supabase.from('promotion_rules').delete().eq('id', ruleId));
+}
+
+async function markPromotionAlert(guildId, userId, ruleId, pointsAtTrigger) {
+  const { data, error } = await supabase.from('promotion_alerts').insert({
+    guild_id: guildId,
+    user_id: userId,
+    rule_id: ruleId,
+    points_at_trigger: normalizePoints(pointsAtTrigger)
+  }).select().single();
+
+  if (error) {
+    if ((error.code === '23505') || /duplicate key/i.test(error.message || '')) return null;
+    throw error;
+  }
+  return data;
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 //  PANELS
 // ════════════════════════════════════════════════════════════════════════════
+async function ensurePanelNumbers(guildId) {
+  if (!guildId) return;
+  const { data, error } = await supabase
+    .from('panels')
+    .select('id, panel_number, created_at')
+    .eq('guild_id', guildId)
+    .order('created_at', { ascending: true });
+  if (error || !data?.length) return;
+
+  let maxNumber = data.reduce((max, row) => {
+    const n = Number(row.panel_number);
+    return Number.isFinite(n) && n > max ? n : max;
+  }, 0);
+
+  for (const row of data) {
+    if (Number.isFinite(Number(row.panel_number)) && Number(row.panel_number) > 0) continue;
+    maxNumber += 1;
+    await supabase.from('panels').update({ panel_number: maxNumber }).eq('id', row.id);
+  }
+}
+
+async function getPanelByRef(guildId, panelRef) {
+  if (!panelRef) return null;
+  const direct = await supabase.from('panels').select('*').eq('id', panelRef).maybeSingle();
+  if (direct.data) return direct.data;
+
+  const num = Number(panelRef);
+  if (Number.isInteger(num) && num > 0) {
+    if (guildId) await ensurePanelNumbers(guildId);
+    let q = supabase.from('panels').select('*').eq('panel_number', num);
+    if (guildId) q = q.eq('guild_id', guildId);
+    const { data } = await q.maybeSingle();
+    return data || null;
+  }
+  return direct.data || null;
+}
 async function createPanel(guildId, data) {
   await ensureGuild(guildId);
+  await ensurePanelNumbers(guildId);
+  const { data: latest } = await supabase
+    .from('panels')
+    .select('panel_number')
+    .eq('guild_id', guildId)
+    .order('panel_number', { ascending: false })
+    .limit(1);
+  const nextNumber = (latest?.[0]?.panel_number || 0) + 1;
   return handle(await supabase
-    .from('panels').insert({ guild_id: guildId, ...data }).select().single());
+    .from('panels').insert({ guild_id: guildId, panel_number: nextNumber, ...data }).select().single());
 }
 
 async function getPanels(guildId) {
+  await ensurePanelNumbers(guildId);
   const { data } = await supabase
-    .from('panels').select('*').eq('guild_id', guildId).order('created_at', { ascending: true });
+    .from('panels').select('*').eq('guild_id', guildId).order('panel_number', { ascending: true });
   return data || [];
 }
 
@@ -181,7 +295,13 @@ async function closeTicket(channelId, closeReason = null, staffId = null) {
 
 async function claimTicket(channelId, staffId) {
   return handle(await supabase.from('tickets')
-    .update({ claimed_by: staffId, status: 'claimed', last_activity: new Date().toISOString() })
+    .update({ claimed_by: staffId, claimed_at: new Date().toISOString(), status: 'claimed', last_activity: new Date().toISOString() })
+    .eq('channel_id', channelId).select().single());
+}
+
+async function unclaimTicket(channelId) {
+  return handle(await supabase.from('tickets')
+    .update({ claimed_by: null, claimed_at: null, first_staff_reply_at: null, first_staff_reply_by: null, status: 'open', last_activity: new Date().toISOString() })
     .eq('channel_id', channelId).select().single());
 }
 
@@ -217,7 +337,7 @@ async function removeStaff(guildId, userId) {
 
 async function getStaff(guildId) {
   const { data } = await supabase
-    .from('staff').select('*').eq('guild_id', guildId).order('tickets_closed', { ascending: false });
+    .from('staff').select('*').eq('guild_id', guildId).order('points_total', { ascending: false });
   return data || [];
 }
 
@@ -225,6 +345,18 @@ async function isStaff(guildId, userId) {
   const { data } = await supabase.from('staff')
     .select('user_id').eq('guild_id', guildId).eq('user_id', userId).maybeSingle();
   return !!data;
+}
+
+// Check staff via DB table OR via guild staff role
+async function isStaffOrHasRole(guildId, userId, memberRoleIds = []) {
+  const { data } = await supabase.from('staff')
+    .select('user_id').eq('guild_id', guildId).eq('user_id', userId).maybeSingle();
+  if (data) return true;
+
+  const guildData = await getGuild(guildId);
+  if (guildData?.staff_role_id && memberRoleIds.includes(guildData.staff_role_id)) return true;
+
+  return false;
 }
 
 async function updateStaffAvailability(guildId, userId, available) {
@@ -246,6 +378,204 @@ async function incrementStaffClosed(guildId, userId, rating = null) {
     updates.avg_rating = Math.round(avg * 100) / 100;
   }
   await supabase.from('staff').update(updates).eq('guild_id', guildId).eq('user_id', userId);
+}
+
+// Update staff rating only (no tickets_closed increment) — called from rating select
+async function updateStaffRating(guildId, userId, rating) {
+  const { data } = await supabase.from('staff')
+    .select('avg_rating, total_ratings').eq('guild_id', guildId).eq('user_id', userId).maybeSingle();
+  if (!data) return;
+
+  const total = (data.total_ratings || 0) + 1;
+  const avg   = (((data.avg_rating || 0) * (data.total_ratings || 0)) + rating) / total;
+  await supabase.from('staff').update({
+    total_ratings: total,
+    avg_rating: Math.round(avg * 100) / 100
+  }).eq('guild_id', guildId).eq('user_id', userId);
+}
+
+async function recordPointEvent(guildId, userId, points, source, details = {}) {
+  if (!guildId || !userId || !points) return null;
+  return handle(await supabase.from('staff_point_events').insert({
+    guild_id: guildId,
+    user_id: userId,
+    points,
+    source,
+    details
+  }).select().single());
+}
+
+async function awardPoints(guildId, userId, points, source, details = {}) {
+  const value = normalizePoints(points);
+  if (!guildId || !userId || value === 0) return null;
+
+  const { data } = await supabase
+    .from('staff')
+    .select('points_total, points_weekly')
+    .eq('guild_id', guildId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (!data) return null;
+
+  const beforePoints = data.points_total || 0;
+  const update = {
+    points_total: beforePoints + value,
+    points_weekly: (data.points_weekly || 0) + value
+  };
+
+  await supabase.from('staff')
+    .update(update)
+    .eq('guild_id', guildId)
+    .eq('user_id', userId);
+
+  await recordPointEvent(guildId, userId, value, source, details).catch(() => null);
+  return { beforePoints, afterPoints: update.points_total, pointsAdded: value };
+}
+
+async function awardResponsePoints(guildId, userId, responseSeconds, details = {}) {
+  const points = getResponsePoints(responseSeconds);
+  if (!points) return null;
+
+  const { data } = await supabase
+    .from('staff')
+    .select('points_total, points_weekly, avg_response_seconds, total_response_seconds, response_count')
+    .eq('guild_id', guildId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (!data) return null;
+
+  const beforePoints = data.points_total || 0;
+  const responseCount = (data.response_count || 0) + 1;
+  const totalResponseSeconds = (data.total_response_seconds || 0) + Math.max(0, Math.round(responseSeconds || 0));
+  const avgResponseSeconds = Math.round(totalResponseSeconds / responseCount);
+
+  await supabase.from('staff').update({
+    points_total: beforePoints + points,
+    points_weekly: (data.points_weekly || 0) + points,
+    total_response_seconds: totalResponseSeconds,
+    response_count: responseCount,
+    avg_response_seconds: avgResponseSeconds
+  }).eq('guild_id', guildId).eq('user_id', userId);
+
+  await recordPointEvent(guildId, userId, points, 'response', { responseSeconds, ...details }).catch(() => null);
+  return { beforePoints, afterPoints: beforePoints + points, points };
+}
+
+async function awardClosePoints(guildId, userId, ticket, details = {}) {
+  if (!guildId || !userId || !ticket) return null;
+
+  const { data } = await supabase
+    .from('staff')
+    .select('points_total, points_weekly, streak_days, best_streak, last_point_date')
+    .eq('guild_id', guildId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (!data) return null;
+
+  const beforePoints = data.points_total || 0;
+  const today = getRiyadhDateKey();
+  const yesterday = getYesterdayKey();
+  let streakDays = data.streak_days || 0;
+  if (data.last_point_date === yesterday) streakDays += 1;
+  else if (data.last_point_date === today) streakDays = streakDays || 1;
+  else streakDays = 1;
+
+  const streakBonus = getStreakBonus(streakDays);
+  const points = 10 + streakBonus;
+
+  const update = {
+    points_total: beforePoints + points,
+    points_weekly: (data.points_weekly || 0) + points,
+    streak_days: streakDays,
+    best_streak: Math.max(data.best_streak || 0, streakDays),
+    last_point_date: today
+  };
+
+  await supabase.from('staff')
+    .update(update)
+    .eq('guild_id', guildId)
+    .eq('user_id', userId);
+
+  await recordPointEvent(guildId, userId, 10, 'close', { ...details, streakDays }).catch(() => null);
+  if (streakBonus) await recordPointEvent(guildId, userId, streakBonus, 'streak_bonus', { ...details, streakDays }).catch(() => null);
+
+  return { beforePoints, afterPoints: update.points_total, pointsAdded: points, streakBonus, streakDays };
+}
+
+async function markFirstStaffReply(channelId, staffId) {
+  const ticket = await getTicket(channelId);
+  if (!ticket || ticket.status === 'closed' || ticket.first_staff_reply_at) return null;
+
+  const now = new Date().toISOString();
+  const responseSeconds = ticket.created_at
+    ? Math.max(0, Math.round((new Date(now).getTime() - new Date(ticket.created_at).getTime()) / 1000))
+    : null;
+
+  const updated = await handle(await supabase.from('tickets')
+    .update({
+      first_staff_reply_at: now,
+      first_staff_reply_by: staffId,
+      last_activity: now
+    })
+    .eq('channel_id', channelId)
+    .select()
+    .single());
+
+  const reward = await awardResponsePoints(ticket.guild_id, staffId, responseSeconds, {
+    ticket_id: ticket.id,
+    channel_id: channelId
+  }).catch(() => null);
+
+  return { ticket: updated, reward };
+}
+
+async function getPointsLeaderboard(guildId, scope = 'total', limit = 10) {
+  if (scope === 'weekly') {
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const { data } = await supabase.from('staff_point_events')
+      .select('user_id, points, created_at')
+      .eq('guild_id', guildId)
+      .gte('created_at', since);
+
+    const totals = new Map();
+    for (const row of data || []) {
+      totals.set(row.user_id, (totals.get(row.user_id) || 0) + (row.points || 0));
+    }
+    return [...totals.entries()]
+      .map(([user_id, points]) => ({ user_id, points }))
+      .sort((a, b) => b.points - a.points)
+      .slice(0, limit);
+  }
+
+  const { data } = await supabase.from('staff')
+    .select('user_id, points_total, points_weekly, streak_days, best_streak, avg_response_seconds, response_count, available, tickets_closed')
+    .eq('guild_id', guildId)
+    .order('points_total', { ascending: false })
+    .limit(limit);
+
+  return (data || []).map(row => ({
+    user_id: row.user_id,
+    points: row.points_total || 0,
+    weekly_points: row.points_weekly || 0,
+    streak_days: row.streak_days || 0,
+    best_streak: row.best_streak || 0,
+    avg_response_seconds: row.avg_response_seconds || 0,
+    response_count: row.response_count || 0,
+    available: row.available,
+    tickets_closed: row.tickets_closed || 0
+  }));
+}
+
+async function getStaffPointsSummary(guildId, userId) {
+  const { data } = await supabase.from('staff')
+    .select('*')
+    .eq('guild_id', guildId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  return data;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -400,15 +730,19 @@ module.exports = {
   SupabaseStore,
   // Guilds
   ensureGuild, getGuild, updateGuildSettings,
+  getPromotionRules, addPromotionRule, deletePromotionRule, markPromotionAlert,
   // Panels
-  createPanel, getPanels, getPanel, updatePanel, deletePanel, setPanelMessage,
+  createPanel, getPanels, getPanel, getPanelByRef, ensurePanelNumbers, updatePanel, deletePanel, setPanelMessage,
   // Tickets
   createTicket, getTicket, getTicketById, getOpenTicketsByUser,
   getTicketsByGuild, getTicketsForAutoClose, updateTicket,
-  closeTicket, claimTicket, setTicketPriority, rateTicket, updateLastActivity,
+  closeTicket, claimTicket, unclaimTicket, setTicketPriority, rateTicket, updateLastActivity,
   // Staff
-  addStaff, removeStaff, getStaff, isStaff,
-  updateStaffAvailability, incrementStaffClosed,
+  addStaff, removeStaff, getStaff, isStaff, isStaffOrHasRole,
+  updateStaffAvailability, incrementStaffClosed, updateStaffRating,
+  // Points
+  recordPointEvent, awardPoints, awardResponsePoints, awardClosePoints, markFirstStaffReply,
+  getPointsLeaderboard, getStaffPointsSummary,
   // Notes
   addNote, getNotes,
   // Keywords

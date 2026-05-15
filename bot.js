@@ -7,6 +7,7 @@ const {
 const db = require('./database');
 const { handleInteraction } = require('./tickets');
 const { registerCommands }  = require('./commands');
+const { notifyPromotionThresholds } = require('./promotion');
 
 const client = new Client({
   intents: [
@@ -55,6 +56,25 @@ client.on(Events.MessageCreate, async message => {
   const ticket = await db.getTicket(message.channel.id).catch(() => null);
   if (ticket && ticket.status !== 'closed') {
     await db.updateLastActivity(message.channel.id).catch(() => {});
+
+    const member = message.member;
+    const roleIds = member ? [...member.roles.cache.keys()] : [];
+    const isStaff = await db.isStaffOrHasRole(guildId, message.author.id, roleIds).catch(() => false);
+
+    // First staff reply → points + response timer
+    if (isStaff && message.author.id !== ticket.user_id && !ticket.first_staff_reply_at) {
+      const result = await db.markFirstStaffReply(message.channel.id, message.author.id).catch(() => null);
+      if (result?.reward) {
+        await notifyPromotionThresholds(
+          client,
+          guildId,
+          message.author.id,
+          result.reward.beforePoints,
+          result.reward.afterPoints,
+          { note: `أول رد داخل التذكرة #${ticket.id}` }
+        ).catch(() => {});
+      }
+    }
 
     // Keyword auto-reply
     const keywords = await db.getKeywords(guildId, ticket.panel_id).catch(() => []);

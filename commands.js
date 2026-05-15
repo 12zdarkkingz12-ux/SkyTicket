@@ -11,6 +11,29 @@ const {
 
 const db = require('./database');
 
+function getRankInfo(points = 0) {
+  const value = Number(points) || 0;
+  if (value >= 1500) return { name: '🏆 أسطورة', min: 1500, next: null };
+  if (value >= 700)  return { name: '💎 خبير', min: 700, next: 1500 };
+  if (value >= 300)  return { name: '🌟 محترف', min: 300, next: 700 };
+  if (value >= 100)  return { name: '⚡ نشيط', min: 100, next: 300 };
+  return { name: '🌱 مبتدئ', min: 0, next: 100 };
+}
+
+function formatDuration(seconds) {
+  if (seconds == null || Number.isNaN(seconds)) return '—';
+  const s = Math.max(0, Math.round(seconds));
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  if (m >= 60) {
+    const h = Math.floor(m / 60);
+    const mm = m % 60;
+    return `${h}س ${mm}د`;
+  }
+  return `${m}د ${rem}ث`;
+}
+
+
 // ════════════════════════════════════════════════════════════════════════════
 //  COMMAND DEFINITIONS
 // ════════════════════════════════════════════════════════════════════════════
@@ -82,6 +105,23 @@ const commands = [
     .setName('stats')
     .setDescription('إحصائيات نظام التذاكر')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+  // ─── /leaderboard ─────────────────────────────────────────────────────────
+  new SlashCommandBuilder()
+    .setName('leaderboard')
+    .setDescription('عرض لوحة المتصدرين بالنقاط')
+    .addStringOption(o => o.setName('scope')
+      .setDescription('نوع اللوحة')
+      .addChoices(
+        { name: 'إجمالي', value: 'total' },
+        { name: 'أسبوعي', value: 'weekly' }
+      )),
+
+  // ─── /prints ──────────────────────────────────────────────────────────────
+  new SlashCommandBuilder()
+    .setName('prints')
+    .setDescription('عرض نقاطك أو نقاط مستخدم آخر')
+    .addUserOption(o => o.setName('user').setDescription('المستخدم').setRequired(false)),
 
   // ─── /ticket ──────────────────────────────────────────────────────────────
   new SlashCommandBuilder()
@@ -164,24 +204,25 @@ async function handleCommand(interaction, client) {
           .setTitle('✅ تم إنشاء اللوحة')
           .addFields(
             { name: 'الاسم',    value: panel.name,                          inline: true },
-            { name: 'المعرف',   value: `\`${panel.id}\``,                   inline: true },
-            { name: 'الخطوة التالية', value: `استخدم \`/panel send panel_id:${panel.id}\` لإرسالها في قناة` }
+            { name: 'الرقم السريع', value: `#${panel.panel_number || '—'}`, inline: true },
+            { name: 'المعرف',   value: `\`${panel.id}\``,                   inline: false },
+            { name: 'الخطوة التالية', value: `استخدم \`/panel send panel_id:${panel.panel_number || panel.id}\` لإرسالها في قناة` }
           )]
       });
     }
 
     if (sub === 'send') {
-      const panelId = interaction.options.getString('panel_id');
+      const panelId = interaction.options.getString('panel_id')?.trim();
       const ch      = interaction.options.getChannel('channel') || interaction.channel;
       await interaction.deferReply({ ephemeral: true });
 
-      const panel = await db.getPanel(panelId);
-      if (!panel || panel.guild_id !== interaction.guild.id)
-        return interaction.editReply({ content: '❌ لوحة غير موجودة.' });
+      const panel = await db.getPanelByRef(interaction.guild.id, panelId);
+      if (!panel)
+        return interaction.editReply({ content: '❌ لوحة غير موجودة. تأكد من الرقم أو المعرف.' });
 
       const { sendPanelEmbed } = require('./tickets');
       await sendPanelEmbed(ch, panel, interaction.guild);
-      return interaction.editReply({ content: `✅ تم إرسال اللوحة في ${ch}.` });
+      return interaction.editReply({ content: `✅ تم إرسال اللوحة **#${panel.panel_number || '—'}** في ${ch}.` });
     }
 
     if (sub === 'list') {
@@ -192,19 +233,19 @@ async function handleCommand(interaction, client) {
       const embed = new EmbedBuilder()
         .setColor('#dc2626')
         .setTitle('🗂️ لوحات التذاكر')
-        .setDescription(panels.map(p => `**${p.name}** — \`${p.id}\``).join('\n'));
+        .setDescription(panels.map(p => `**#${p.panel_number || '—'}** • ${p.name} — \`${p.id}\``).join('\n'));
 
       return interaction.reply({ embeds: [embed], ephemeral: true });
     }
 
     if (sub === 'delete') {
-      const panelId = interaction.options.getString('panel_id');
-      const panel   = await db.getPanel(panelId);
-      if (!panel || panel.guild_id !== interaction.guild.id)
+      const panelId = interaction.options.getString('panel_id')?.trim();
+      const panel   = await db.getPanelByRef(interaction.guild.id, panelId);
+      if (!panel)
         return interaction.reply({ content: '❌ لوحة غير موجودة.', ephemeral: true });
 
-      await db.deletePanel(panelId);
-      return interaction.reply({ content: `✅ تم حذف اللوحة **${panel.name}**.`, ephemeral: true });
+      await db.deletePanel(panel.id);
+      return interaction.reply({ content: `✅ تم حذف اللوحة **#${panel.panel_number || '—'} ${panel.name}**.`, ephemeral: true });
     }
   }
 
@@ -236,7 +277,7 @@ async function handleCommand(interaction, client) {
         .setColor('#dc2626')
         .setTitle('👥 فريق الدعم')
         .setDescription(staffList.map((s, i) =>
-          `**${i + 1}.** <@${s.user_id}> • 🎫 ${s.tickets_closed} • ⭐ ${s.avg_rating || '—'} • ${s.available ? '🟢' : '🔴'}`
+          `**${i + 1}.** <@${s.user_id}> • ⭐ النقاط: ${s.points_total || 0} • 🎫 ${s.tickets_closed || 0} • 🔥 الستريك: ${s.streak_days || 0} • ${s.available ? '🟢' : '🔴'}`
         ).join('\n'));
 
       return interaction.reply({ embeds: [embed] });
@@ -253,6 +294,59 @@ async function handleCommand(interaction, client) {
         ephemeral: true
       });
     }
+  }
+
+  // ─── /leaderboard ──────────────────────────────────────────────────────
+  if (commandName === 'leaderboard') {
+    await interaction.deferReply();
+    const scope = interaction.options.getString('scope') || 'total';
+    const board = await db.getPointsLeaderboard(interaction.guild.id, scope, 10);
+
+    const lines = await Promise.all(board.map(async (row, index) => {
+      const member = interaction.guild.members.cache.get(row.user_id) || await interaction.guild.members.fetch(row.user_id).catch(() => null);
+      const name = member?.user?.tag || `<@${row.user_id}>`;
+      const rank = getRankInfo(row.points || 0).name;
+      const weekly = scope === 'weekly' ? ` • هذا الأسبوع: **${row.points || 0}**` : ` • أسبوعيًا: **${row.weekly_points || 0}**`;
+      return `**${index + 1}.** ${name} • **${row.points || 0}** نقطة • ${rank}${weekly}`;
+    }));
+
+    const embed = new EmbedBuilder()
+      .setColor('#dc2626')
+      .setTitle(scope === 'weekly' ? '🏆 لوحة المتصدرين الأسبوعية' : '🏆 لوحة المتصدرين بالنقاط')
+      .setDescription(lines.length ? lines.join('\n') : 'لا توجد نقاط بعد.')
+      .setFooter({ text: 'SkyTicket Points System' })
+      .setTimestamp();
+
+    return interaction.editReply({ embeds: [embed] });
+  }
+
+  // ─── /prints ────────────────────────────────────────────────────────────
+  if (commandName === 'prints') {
+    await interaction.deferReply({ ephemeral: true });
+    const target = interaction.options.getUser('user') || interaction.user;
+    const summary = await db.getStaffPointsSummary(interaction.guild.id, target.id);
+    const weeklyBoard = await db.getPointsLeaderboard(interaction.guild.id, 'weekly', 200);
+    const weekly = weeklyBoard.find(x => x.user_id === target.id)?.points || 0;
+    const total = summary?.points_total || 0;
+    const rank = getRankInfo(total);
+    const avgResponse = formatDuration(summary?.avg_response_seconds || 0);
+
+    const embed = new EmbedBuilder()
+      .setColor('#dc2626')
+      .setTitle(`📊 نقاط ${target.username}`)
+      .setThumbnail(target.displayAvatarURL({ size: 128 }))
+      .addFields(
+        { name: 'النقاط الإجمالية', value: `${total}`, inline: true },
+        { name: 'النقاط الأسبوعية', value: `${weekly}`, inline: true },
+        { name: 'الرتبة الحالية', value: rank.name, inline: true },
+        { name: 'الستريك', value: `${summary?.streak_days || 0} يوم`, inline: true },
+        { name: 'أفضل ستريك', value: `${summary?.best_streak || 0} يوم`, inline: true },
+        { name: 'متوسط سرعة الرد', value: avgResponse, inline: true }
+      )
+      .setFooter({ text: summary ? `آخر تحديث للنقاط: ${summary.last_point_date || '—'}` : 'لا يوجد سجل نقاط بعد' })
+      .setTimestamp();
+
+    return interaction.editReply({ embeds: [embed] });
   }
 
   // ─── /ban ──────────────────────────────────────────────────────────────
@@ -384,11 +478,34 @@ async function sendPanelEmbed(channel, panel, guild) {
   const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
   const db = require('./database');
 
+function getRankInfo(points = 0) {
+  const value = Number(points) || 0;
+  if (value >= 1500) return { name: '🏆 أسطورة', min: 1500, next: null };
+  if (value >= 700)  return { name: '💎 خبير', min: 700, next: 1500 };
+  if (value >= 300)  return { name: '🌟 محترف', min: 300, next: 700 };
+  if (value >= 100)  return { name: '⚡ نشيط', min: 100, next: 300 };
+  return { name: '🌱 مبتدئ', min: 0, next: 100 };
+}
+
+function formatDuration(seconds) {
+  if (seconds == null || Number.isNaN(seconds)) return '—';
+  const s = Math.max(0, Math.round(seconds));
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  if (m >= 60) {
+    const h = Math.floor(m / 60);
+    const mm = m % 60;
+    return `${h}س ${mm}د`;
+  }
+  return `${m}د ${rem}ث`;
+}
+
+
   const styleMap = { DANGER: ButtonStyle.Danger, PRIMARY: ButtonStyle.Primary, SECONDARY: ButtonStyle.Secondary, SUCCESS: ButtonStyle.Success };
 
   const embed = new EmbedBuilder()
     .setColor(panel.embed_color || '#dc2626')
-    .setTitle(panel.embed_title || 'فتح تذكرة')
+    .setTitle(`${panel.embed_title || 'فتح تذكرة'}${panel.panel_number ? ` • #${panel.panel_number}` : ''}`)
     .setDescription(panel.embed_description || '');
 
   if (panel.embed_footer)    embed.setFooter({ text: panel.embed_footer });
