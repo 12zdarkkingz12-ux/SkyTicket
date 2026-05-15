@@ -871,6 +871,23 @@ textarea { resize: vertical; min-height: 80px; }
 .log-time   { font-size: 11px; color: var(--text-dim); }
 .log-details{ color: var(--text-muted); }
 
+/* ─── Help page ──────────────────────────────────────────────── */
+.help-item {
+  padding: 8px 12px;
+  background: var(--bg3);
+  border-radius: 6px;
+  font-size: 13px;
+  border-right: 2px solid var(--accent);
+  line-height: 1.5;
+}
+.help-item code {
+  background: var(--accent-bg);
+  color: var(--accent);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
 /* ─── Login page ─────────────────────────────────────────────── */
 .login-page {
   min-height: 100vh;
