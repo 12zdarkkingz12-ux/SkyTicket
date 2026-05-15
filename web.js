@@ -4,11 +4,9 @@ const passport = require('passport');
 const { Strategy: DiscordStrategy } = require('passport-discord');
 const path     = require('path');
 const db       = require('./database');
-const { version: packageVersion } = require('./package.json');
 
 const app = express();
 const isProduction = process.env.NODE_ENV === 'production' || !!process.env.RENDER || !!process.env.RENDER_SERVICE_ID;
-const assetVersion  = process.env.ASSET_VERSION || process.env.RENDER_GIT_COMMIT || process.env.COMMIT_SHA || packageVersion;
 
 const env = (...names) => {
   for (const name of names) {
@@ -17,6 +15,9 @@ const env = (...names) => {
   }
   return undefined;
 };
+
+const assetVersionRaw = env('ASSET_VERSION');
+const assetVersion = /^\d+$/.test(String(assetVersionRaw || '').trim()) ? String(assetVersionRaw).trim() : '1';
 
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
@@ -29,6 +30,11 @@ app.set('views', path.join(__dirname, 'views'));
 app.locals.assetVersion = assetVersion;
 app.locals.appName = 'SkyTicket';
 app.locals.themeColor = '#dc2626';
+app.use((req, res, next) => {
+  res.locals.assetVersion = assetVersion;
+  next();
+});
+
 
 app.use((req, res, next) => {
   req.requestId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -259,6 +265,11 @@ app.get('/guild/:id', ensureAuth, ensureGuildAdminPage, async (req, res) => {
       db.getGuildStats(guild.id)
     ]);
 
+    const categoryChannels = guild.channels.cache
+      .filter(ch => ch?.type === 4)
+      .sort((a, b) => a.position - b.position)
+      .map(ch => ({ id: ch.id, name: ch.name }));
+
     // Resolve usernames from Discord cache for tickets
     const enriched = allTickets.slice(0, 100).map(t => ({
       ...t,
@@ -277,7 +288,8 @@ app.get('/guild/:id', ensureAuth, ensureGuildAdminPage, async (req, res) => {
       tickets:   enriched,
       bans,
       logs,
-      stats
+      stats,
+      categoryChannels
     });
   } catch (err) {
     console.error('[Dashboard]', err);
@@ -552,6 +564,35 @@ app.get('/api/guild/:guildId/roles', ensureAuth, ensureGuildAdmin, async (req, r
 });
 
 // ════════════════════════════════════════════════════════════════════════════
+
+app.get('/api/guild/:guildId/members', ensureAuth, ensureGuildAdmin, async (req, res) => {
+  try {
+    const { client } = require('./bot');
+    const guild = client.guilds.cache.get(req.params.guildId);
+    if (!guild) return res.status(404).json({ error: 'السيرفر غير موجود' });
+
+    try {
+      await guild.members.fetch();
+    } catch (fetchErr) {
+      console.warn('[Web] Member fetch fallback:', fetchErr?.message || fetchErr);
+    }
+
+    const members = guild.members.cache
+      .filter(m => m?.user && !m.user.bot)
+      .map(m => ({
+        id: m.id,
+        name: m.displayName || m.user.username || m.user.tag || m.id,
+        tag: m.user.tag || m.user.username || m.id,
+        avatar: m.user.displayAvatarURL?.({ size: 64 }) || null
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+
+    res.json(members);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 //  HEALTH (for UptimeRobot)
 // ════════════════════════════════════════════════════════════════════════════
 app.get('/health', (req, res) => {
