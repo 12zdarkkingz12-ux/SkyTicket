@@ -3,15 +3,23 @@ const cron = require('node-cron');
 const { startBot, client } = require('./bot');
 const { startWeb } = require('./web');
 const db = require('./database');
+const { version } = require('./package.json');
 
 // ─── Startup ─────────────────────────────────────────────────────────────────
 console.log(`
  ╔═══════════════════════════════╗
- ║   🔴 SkyTicket  v2.1.0   ║
+ ║   🔴 SkyTicket  v2.2.0   ║
  ║      Developed by Dark        ║
  ╚═══════════════════════════════╝
 `);
 
+console.log(`[Startup] Package version: ${version}`);
+process.on('uncaughtException', (err) => {
+  console.error('[Fatal] Uncaught Exception:', err);
+});
+process.on('unhandledRejection', (err) => {
+  console.error('[Fatal] Unhandled Rejection:', err);
+});
 (async () => {
   await startBot();
   await startWeb();

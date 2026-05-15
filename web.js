@@ -4,10 +4,13 @@ const passport = require('passport');
 const { Strategy: DiscordStrategy } = require('passport-discord');
 const path     = require('path');
 const db       = require('./database');
+const { version: packageVersion } = require('./package.json');
 
 const app = express();
+const isProduction = process.env.NODE_ENV === 'production' || !!process.env.RENDER || !!process.env.RENDER_SERVICE_ID;
+const assetVersion  = process.env.ASSET_VERSION || process.env.RENDER_GIT_COMMIT || process.env.COMMIT_SHA || packageVersion;
 
-// Render/Proxy-aware session handling
+app.disable('x-powered-by');
 app.set('trust proxy', 1);
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -15,23 +18,57 @@ app.set('trust proxy', 1);
 // ════════════════════════════════════════════════════════════════════════════
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
-app.use(express.static(path.join(__dirname, 'public')));
+app.locals.assetVersion = assetVersion;
+app.locals.appName = 'SkyTicket';
+app.locals.themeColor = '#dc2626';
+
+app.use((req, res, next) => {
+  req.requestId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const started = Date.now();
+  res.on('finish', () => {
+    const ms = Date.now() - started;
+    console.log(`[Web] ${req.method} ${req.originalUrl} -> ${res.statusCode} (${ms}ms) [${req.requestId}]`);
+  });
+  next();
+});
+
+app.use(express.static(path.join(__dirname, 'public'), {
+  maxAge: isProduction ? '7d' : 0,
+  etag: false,
+  lastModified: false
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // ─── Session ─────────────────────────────────────────────────────────────────
 const callbackURL = process.env.DISCORD_CALLBACK_URL || process.env.REDIRECT_URI || process.env.CALLBACK_URL || 'http://localhost:3000/auth/callback';
+const sessionStore = new db.SupabaseStore();
+if (typeof sessionStore.on === 'function') {
+  sessionStore.on('error', (err) => console.error('[SessionStore] Error:', err));
+}
+
+app.use((req, res, next) => {
+  const noStorePaths = ['/login', '/auth/discord', '/auth/callback', '/auth/discord/callback', '/dashboard', '/guild'];
+  if (noStorePaths.some(p => req.path === p || req.path.startsWith(p + '/'))) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
+  res.setHeader('X-App-Version', assetVersion);
+  next();
+});
 
 app.use(session({
-  store:             new db.SupabaseStore(),
+  store:             sessionStore,
   secret:            process.env.SESSION_SECRET || 'skyticket_secret',
   resave:            false,
   saveUninitialized: false,
   proxy:             true,
+  name:              'skyticket.sid',
   cookie:            {
-    secure: process.env.NODE_ENV === 'production',
+    secure: isProduction,
     httpOnly: true,
-    sameSite: 'lax',
+    sameSite: isProduction ? 'none' : 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000
   }
 }));
@@ -106,21 +143,62 @@ async function ensureGuildAdminPage(req, res, next) {
 // ════════════════════════════════════════════════════════════════════════════
 app.get('/login', (req, res) => {
   if (req.isAuthenticated()) return res.redirect('/dashboard');
-  res.render('login');
+  res.render('login', {
+    error: req.query.error || null,
+    callbackURL,
+    assetVersion
+  });
 });
 
-app.get('/auth/discord', passport.authenticate('discord'));
+const discordAuth = passport.authenticate('discord');
 
-app.get('/auth/callback', passport.authenticate('discord', {
-  failureRedirect: '/login'
-}), (req, res) => {
-  const to = req.session.returnTo || '/dashboard';
-  delete req.session.returnTo;
-  res.redirect(to);
-});
+app.get(['/auth', '/auth/discord'], discordAuth);
+
+function handleDiscordCallback(req, res, next) {
+  passport.authenticate('discord', (err, user, info) => {
+    if (err) {
+      console.error('[Auth] OAuth error:', err);
+      return next(err);
+    }
+
+    if (!user) {
+      console.warn('[Auth] OAuth rejected:', info || 'unknown');
+      return res.redirect('/login?error=' + encodeURIComponent('فشل تسجيل الدخول عبر Discord'));
+    }
+
+    req.logIn(user, (loginErr) => {
+      if (loginErr) {
+        console.error('[Auth] Login session error:', loginErr);
+        return next(loginErr);
+      }
+
+      const to = req.session.returnTo || '/dashboard';
+      delete req.session.returnTo;
+      req.session.save((saveErr) => {
+        if (saveErr) {
+          console.error('[Auth] Session save error:', saveErr);
+          return next(saveErr);
+        }
+        console.log('[Auth] Login success:', { user: user.id || user.username, sessionID: req.sessionID, redirect: to });
+        res.redirect(to);
+      });
+    });
+  })(req, res, next);
+}
+
+app.get(['/auth/callback', '/auth/discord/callback'], handleDiscordCallback);
 
 app.get('/logout', (req, res) => {
-  req.logout(() => res.redirect('/login'));
+  const finish = () => res.redirect('/login');
+  if (!req.logout) return finish();
+  req.logout((err) => {
+    if (err) console.error('[Auth] Logout error:', err);
+    if (req.session) {
+      req.session.destroy(() => finish());
+    } else {
+      finish();
+    }
+  });
 });
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -461,10 +539,18 @@ app.get('/health', (req, res) => {
 // ════════════════════════════════════════════════════════════════════════════
 //  ERROR PAGES
 // ════════════════════════════════════════════════════════════════════════════
-app.use((req, res) => res.status(404).render('error', { message: 'الصفحة غير موجودة (404)' }));
+app.use((req, res) => res.status(404).render('error', { message: 'الصفحة غير موجودة (404)', assetVersion }));
+
 app.use((err, req, res, next) => {
-  console.error(err);
-  res.status(500).render('error', { message: 'خطأ في الخادم (500)' });
+  console.error('[Web] Unhandled error:', {
+    message: err?.message,
+    stack: err?.stack,
+    path: req?.originalUrl,
+    method: req?.method,
+    requestId: req?.requestId
+  });
+  if (res.headersSent) return next(err);
+  res.status(500).render('error', { message: 'خطأ في الخادم (500)', assetVersion });
 });
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -472,7 +558,12 @@ app.use((err, req, res, next) => {
 // ════════════════════════════════════════════════════════════════════════════
 function startWeb() {
   const port = process.env.PORT || 3000;
-  app.listen(port, () => console.log(`[Web] Dashboard running on port ${port} ✅`));
+  app.listen(port, () => {
+    console.log(`[Web] Dashboard running on port ${port} ✅`);
+    console.log(`[Web] Asset version: ${assetVersion}`);
+    console.log(`[Web] OAuth callback: ${callbackURL}`);
+    console.log(`[Web] Production mode: ${isProduction ? 'yes' : 'no'}`);
+  });
 }
 
 module.exports = { startWeb };

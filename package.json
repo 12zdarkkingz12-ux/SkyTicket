@@ -1,7 +1,7 @@
 {
   "name": "sky-ticket-pro",
-  "version": "2.1.0",
-  "description": "بوت تذاكر احترافي — SkyTicket — من صنع Dark",
+  "version": "2.2.0",
+  "description": "بوت تذاكر احترافي — SkyTicket",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
