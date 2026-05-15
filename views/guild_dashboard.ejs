@@ -11,6 +11,8 @@
 </head>
 <body>
 
+<div class="sidebar-overlay" id="sidebar-overlay" aria-hidden="true" onclick="closeSidebar()"></div>
+
 <!-- ══════════════════════════════════════════════════════════
      DATA  (server → client)
 ═══════════════════════════════════════════════════════════ -->
@@ -118,6 +120,10 @@
 ═══════════════════════════════════════════════════════════ -->
 <nav class="sidebar">
 
+  <div class="sidebar-mobile-header">
+    <button type="button" class="sidebar-close" aria-label="Close sidebar" onclick="closeSidebar()">✕</button>
+  </div>
+
   <div class="sidebar-brand">
     <a href="#" class="brand-logo">
       <span class="icon"><img src="/logo.png?v=<%= assetVersion %>" alt="logo" onerror="this.style.display='none'"></span>
@@ -212,6 +218,19 @@
 <!-- ══════════════════════════════════════════════════════════
      MAIN CONTENT
 ═══════════════════════════════════════════════════════════ -->
+<div class="mobile-topbar">
+  <button type="button" class="sidebar-toggle" aria-label="Menu" onclick="toggleSidebar()">
+    <span></span><span></span><span></span>
+  </button>
+  <div class="mobile-topbar-brand">
+    <span class="mobile-topbar-logo"><img src="/logo.png?v=<%= assetVersion %>" alt="SkyTicket" onerror="this.style.display='none'"></span>
+    <div class="mobile-topbar-text">
+      <strong>SkyTicket</strong>
+      <span><%= guild.name %></span>
+    </div>
+  </div>
+</div>
+
 <main class="main">
 
 <!-- ──────────────────────────────────────────────────────────
@@ -1398,6 +1417,19 @@
      JAVASCRIPT
 ═══════════════════════════════════════════════════════════ -->
 <script>
+// ─── Sidebar Drawer ───────────────────────────────────────────
+function isMobileSidebar() {
+  return window.matchMedia('(max-width: 768px)').matches;
+}
+
+function setSidebarOpen(open) {
+  document.body.classList.toggle('sidebar-open', !!open);
+}
+
+function openSidebar() { setSidebarOpen(true); }
+function closeSidebar() { setSidebarOpen(false); }
+function toggleSidebar() { setSidebarOpen(!document.body.classList.contains('sidebar-open')); }
+
 // ─── Tab Navigation ──────────────────────────────────────────
 function showTab(name) {
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
@@ -1406,10 +1438,19 @@ function showTab(name) {
   if (tab) tab.classList.add('active');
   const nav = document.querySelector(`[data-tab="${name}"]`);
   if (nav) nav.classList.add('active');
+  if (isMobileSidebar()) closeSidebar();
 }
 
 document.querySelectorAll('.nav-item[data-tab]').forEach(item => {
   item.addEventListener('click', () => showTab(item.dataset.tab));
+});
+
+document.getElementById('sidebar-overlay')?.addEventListener('click', closeSidebar);
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeSidebar();
+});
+window.addEventListener('resize', () => {
+  if (!isMobileSidebar()) closeSidebar();
 });
 
 // ─── Modals ───────────────────────────────────────────────────
@@ -1883,6 +1924,7 @@ async function refreshStats() {
 
 // ─── INIT ─────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+  closeSidebar();
   loadDropdowns();
   animateCounters();
   initCharts();
