@@ -25,6 +25,7 @@
   const BANS       = <%- JSON.stringify(bans) %>;
   const LOGS       = <%- JSON.stringify(logs) %>;
   const GUILD_DATA = <%- JSON.stringify(guildData) %>;
+  const PROMOTION_RULES = <%- JSON.stringify(promotionRules || []) %>;
 
   const LOOKUPS = {
     channels: null,
@@ -87,6 +88,7 @@
 
       const channelSelects = [
         document.getElementById('s-log-channel'),
+        document.getElementById('s-promo-channel'),
         document.getElementById('send-channel-id'),
       ].filter(Boolean);
       channelSelects.forEach(select => {
@@ -97,6 +99,7 @@
       const roleSelects = [
         document.getElementById('p-mention-role'),
         document.getElementById('edit-p-mention-role'),
+        document.getElementById('s-promo-role'),
       ].filter(Boolean);
       roleSelects.forEach(select => setSelectOptions(select, roles, select.value, '— بدون —', role => `${role.name}${role.color && role.color !== '#000000' ? ` • ${role.color}` : ''}`));
 
@@ -111,9 +114,10 @@
   }
 </script>
 
-<div class="sidebar-backdrop" id="sidebar-backdrop" aria-hidden="true"></div>
-
 <div class="layout">
+
+<!-- Backdrop inside layout → same stacking context as sidebar (fixes mobile overlay bug) -->
+<div class="sidebar-backdrop" id="sidebar-backdrop" aria-hidden="true"></div>
 
 <!-- ══════════════════════════════════════════════════════════
      SIDEBAR
@@ -360,10 +364,14 @@
           <div class="panel-name"><%= p.embed_title || p.name %></div>
           <div class="panel-desc"><%= p.embed_description || p.description || '' %></div>
           <div class="panel-meta">
+            <span>🆔 #<%= p.panel_number || (panels.findIndex(x => x.id === p.id) + 1) %></span>
             <span>🏷️ <%= p.name %></span>
             <% if (p.require_reason) { %><span>📝 يتطلب سبباً</span><% } %>
             <% if (p.dm_on_close) { %><span>📩 DM عند الإغلاق</span><% } %>
             <% if (p.mention_role) { %><span>🔔 ذكر الرتبة</span><% } %>
+          </div>
+          <div style="margin:8px 0 0;font-size:11px;color:var(--text-muted);word-break:break-all">
+            ID: <code><%= p.id %></code>
           </div>
           <div class="panel-actions">
             <button class="btn btn-ghost btn-sm" onclick="openPanelEdit('<%= p.id %>')">✏️ تعديل</button>
@@ -523,8 +531,9 @@
               <code style="font-size:13px"><%= s.user_id %></code>
             </div>
             <div class="staff-stats">
-              <span>🎫 <%= s.tickets_closed %> مغلقة</span>
-              <span>⭐ <%= s.avg_rating || '—' %></span>
+              <span>⭐ <%= s.points_total || 0 %> نقطة</span>
+              <span>🔥 <%= s.streak_days || 0 %> ستريك</span>
+              <span>🎫 <%= s.tickets_closed || 0 %> مغلقة</span>
               <span><%= s.available ? '🟢 متاح' : '🔴 غير متاح' %></span>
             </div>
           </div>
@@ -538,7 +547,7 @@
       <!-- Staff leaderboard table -->
       <div class="card mt-24">
         <div class="card-header">
-          <div class="card-title">🏆 لوحة المتصدرين</div>
+          <div class="card-title">🏆 لوحة المتصدرين بالنقاط</div>
         </div>
         <div class="table-wrapper">
           <table>
@@ -546,14 +555,15 @@
               <tr>
                 <th>الترتيب</th>
                 <th>العضو</th>
+                <th>النقاط</th>
+                <th>الستريك</th>
                 <th>التذاكر المغلقة</th>
                 <th>متوسط التقييم</th>
-                <th>إجمالي التقييمات</th>
                 <th>الحالة</th>
               </tr>
             </thead>
             <tbody>
-              <% const sorted = [...staff].sort((a,b) => (b.tickets_closed||0)-(a.tickets_closed||0)); %>
+              <% const sorted = [...staff].sort((a,b) => (b.points_total||0)-(a.points_total||0)); %>
               <% sorted.forEach((s, i) => { %>
               <tr>
                 <td>
@@ -563,13 +573,14 @@
                   <% } else { %><span style="color:var(--text-dim)">#<%= i+1 %></span><% } %>
                 </td>
                 <td><code style="background:var(--bg3);padding:2px 8px;border-radius:4px;font-size:12px"><%= s.user_id %></code></td>
+                <td><strong style="color:var(--accent)"><%= s.points_total || 0 %></strong></td>
+                <td><%= s.streak_days || 0 %></td>
                 <td><strong style="color:var(--accent)"><%= s.tickets_closed || 0 %></strong></td>
                 <td>
                   <% if (s.avg_rating) { %>
                     <span style="color:var(--warning)">⭐ <%= s.avg_rating %></span>
                   <% } else { %>—<% } %>
                 </td>
-                <td style="color:var(--text-muted)"><%= s.total_ratings || 0 %></td>
                 <td>
                   <% if (s.available) { %><span class="badge badge-open">🟢 متاح</span>
                   <% } else { %><span class="badge badge-closed">🔴 غير متاح</span><% } %>
@@ -826,6 +837,74 @@
             </label>
           </div>
 
+        </div>
+      </div>
+
+      <div class="mt-16"></div>
+
+      <!-- Promotion Notifications -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">🏅 تنبيهات الترقية اليدوية</div>
+        </div>
+        <div class="form-grid">
+          <div class="form-grid form-grid-2">
+            <div class="form-group">
+              <label>رتبة مسؤولي الترقية</label>
+              <select id="s-promo-role" data-selected="<%= guildData.promotion_role_id || '' %>">
+                <option value="">— بدون —</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>قناة التنبيهات الخاصة</label>
+              <select id="s-promo-channel" data-selected="<%= guildData.promotion_channel_id || '' %>">
+                <option value="">— بدون —</option>
+              </select>
+            </div>
+          </div>
+          <p style="font-size:12px;color:var(--text-dim);margin-top:-2px">
+            تُرسل التنبيهات عند وصول عضو الدعم إلى عدد النقاط المحدد في القواعد أدناه، بدون ترقية تلقائية.
+          </p>
+        </div>
+      </div>
+
+      <div class="mt-16"></div>
+
+      <!-- Promotion Rules -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">📌 قواعد النقاط</div>
+        </div>
+
+        <div class="form-grid form-grid-2" style="margin-bottom:12px">
+          <div class="form-group">
+            <label>النقاط المطلوبة</label>
+            <input type="number" id="promo-threshold" min="1" placeholder="مثال: 300">
+          </div>
+          <div class="form-group">
+            <label>اسم التنبيه</label>
+            <input type="text" id="promo-label" placeholder="مثال: محترف">
+          </div>
+        </div>
+
+        <button class="btn btn-secondary" type="button" onclick="addPromotionRule()">➕ إضافة قاعدة</button>
+
+        <div style="margin-top:14px;display:flex;flex-direction:column;gap:10px">
+          <% if ((promotionRules || []).length === 0) { %>
+            <div class="empty">لا توجد قواعد بعد. أضف أول قاعدة نقاط من الأعلى.</div>
+          <% } else { %>
+            <% promotionRules.forEach(rule => { %>
+              <div class="ticket-row" id="promo-rule-<%= rule.id %>">
+                <div>
+                  <strong>#<%= rule.threshold_points %></strong> • <%= rule.label || 'تنبيه ترقية' %>
+                  <div style="font-size:12px;color:var(--text-dim);margin-top:4px">
+                    <%= rule.enabled ? 'مفعلة' : 'متوقفة' %>
+                  </div>
+                </div>
+                <button class="btn btn-danger" type="button" onclick="deletePromotionRule(<%= rule.id %>)">حذف</button>
+              </div>
+            <% }) %>
+          <% } %>
         </div>
       </div>
 
@@ -1875,11 +1954,36 @@ async function saveSettings() {
       auto_close_hours:     document.getElementById('s-auto-close')?.value,
       auto_close_warn_hours:document.getElementById('s-warn-hours')?.value,
       log_channel_id:       document.getElementById('s-log-channel')?.value,
+      promotion_role_id:    document.getElementById('s-promo-role')?.value,
+      promotion_channel_id: document.getElementById('s-promo-channel')?.value,
       dm_transcript:        document.getElementById('s-dm-transcript')?.checked,
       ping_on_open:         document.getElementById('s-ping-on-open')?.checked,
       require_close_reason: document.getElementById('s-require-close')?.checked,
     });
     toast('تم حفظ الإعدادات ✅', 'success');
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+async function addPromotionRule() {
+  const threshold = document.getElementById('promo-threshold')?.value;
+  const label = document.getElementById('promo-label')?.value || 'تنبيه ترقية';
+  try {
+    const data = await api('POST', `/api/guild/${GUILD_ID}/promotion-rules`, {
+      threshold_points: threshold,
+      label
+    });
+    PROMOTION_RULES.push(data.rule);
+    toast('تمت إضافة قاعدة النقاط ✅', 'success');
+    setTimeout(() => window.location.reload(), 300);
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+async function deletePromotionRule(ruleId) {
+  if (!confirm('حذف قاعدة الترقية؟')) return;
+  try {
+    await api('DELETE', `/api/guild/${GUILD_ID}/promotion-rules/${ruleId}`);
+    document.getElementById(`promo-rule-${ruleId}`)?.remove();
+    toast('تم حذف القاعدة ✅', 'success');
   } catch (err) { toast(err.message, 'error'); }
 }
 
