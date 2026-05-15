@@ -518,6 +518,7 @@ async function handleCommand(interaction, client) {
       return interaction.editReply({ content: `❌ خطأ: ${err.message}` });
     }
   }
+}
 
 // ─── Send panel embed ─────────────────────────────────────────────────────────
 async function sendPanelEmbed(channel, panel, guild) {
