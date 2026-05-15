@@ -109,7 +109,9 @@ body::before {
 .sidebar-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(7, 12, 22, 0.68);
+  background: rgba(7, 12, 22, 0.48);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   z-index: var(--backdrop-z);
   opacity: 0;
   visibility: hidden;
