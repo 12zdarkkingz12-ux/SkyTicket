@@ -10,6 +10,14 @@ const app = express();
 const isProduction = process.env.NODE_ENV === 'production' || !!process.env.RENDER || !!process.env.RENDER_SERVICE_ID;
 const assetVersion  = process.env.ASSET_VERSION || process.env.RENDER_GIT_COMMIT || process.env.COMMIT_SHA || packageVersion;
 
+const env = (...names) => {
+  for (const name of names) {
+    const value = process.env[name];
+    if (value !== undefined && String(value).trim() !== '') return value;
+  }
+  return undefined;
+};
+
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
 
@@ -41,7 +49,10 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // ─── Session ─────────────────────────────────────────────────────────────────
-const callbackURL = process.env.DISCORD_CALLBACK_URL || process.env.REDIRECT_URI || process.env.CALLBACK_URL || 'http://localhost:3000/auth/callback';
+const callbackURL = env('DISCORD_CALLBACK_URL', 'REDIRECT_URI', 'CALLBACK_URL') || 'http://localhost:3000/auth/callback';
+const discordClientId = env('DISCORD_CLIENT_ID', 'CLIENT_ID');
+const discordClientSecret = env('DISCORD_CLIENT_SECRET', 'CLIENT_SECRET');
+const sessionSecret = env('SESSION_SECRET') || 'skyticket_secret';
 const sessionStore = new db.SupabaseStore();
 if (typeof sessionStore.on === 'function') {
   sessionStore.on('error', (err) => console.error('[SessionStore] Error:', err));
@@ -60,7 +71,7 @@ app.use((req, res, next) => {
 
 app.use(session({
   store:             sessionStore,
-  secret:            process.env.SESSION_SECRET || 'skyticket_secret',
+  secret:            sessionSecret,
   resave:            false,
   saveUninitialized: false,
   proxy:             true,
@@ -75,8 +86,8 @@ app.use(session({
 
 // ─── Passport Discord OAuth2 ─────────────────────────────────────────────────
 passport.use(new DiscordStrategy({
-  clientID:     process.env.CLIENT_ID,
-  clientSecret: process.env.CLIENT_SECRET,
+  clientID:     discordClientId,
+  clientSecret: discordClientSecret,
   callbackURL,
   scope:        ['identify', 'guilds']
 }, (_at, _rt, profile, done) => done(null, profile)));
@@ -141,16 +152,20 @@ async function ensureGuildAdminPage(req, res, next) {
 // ════════════════════════════════════════════════════════════════════════════
 //  AUTH ROUTES
 // ════════════════════════════════════════════════════════════════════════════
+if (!discordClientId || !discordClientSecret) {
+  console.warn('[Web] Discord OAuth env is incomplete. Expected DISCORD_CLIENT_ID/CLIENT_ID and DISCORD_CLIENT_SECRET/CLIENT_SECRET.');
+}
+
 app.get('/login', (req, res) => {
   if (req.isAuthenticated()) return res.redirect('/dashboard');
   res.render('login', {
     error: req.query.error || null,
-    callbackURL,
+    callbackURL: isProduction ? 'Discord OAuth جاهز' : callbackURL,
     assetVersion
   });
 });
 
-const discordAuth = passport.authenticate('discord');
+const discordAuth = passport.authenticate('discord', { scope: ['identify', 'guilds'] });
 
 app.get(['/auth', '/auth/discord'], discordAuth);
 
@@ -166,21 +181,33 @@ function handleDiscordCallback(req, res, next) {
       return res.redirect('/login?error=' + encodeURIComponent('فشل تسجيل الدخول عبر Discord'));
     }
 
+    const redirectTo = req.session?.returnTo || '/dashboard';
+
     req.logIn(user, (loginErr) => {
       if (loginErr) {
         console.error('[Auth] Login session error:', loginErr);
         return next(loginErr);
       }
 
-      const to = req.session.returnTo || '/dashboard';
-      delete req.session.returnTo;
+      if (req.session) delete req.session.returnTo;
+
+      if (!req.session || typeof req.session.save !== 'function') {
+        console.error('[Auth] Session object missing after login', { hasSession: !!req.session, sessionID: req.sessionID });
+        return res.redirect(redirectTo);
+      }
+
       req.session.save((saveErr) => {
         if (saveErr) {
           console.error('[Auth] Session save error:', saveErr);
           return next(saveErr);
         }
-        console.log('[Auth] Login success:', { user: user.id || user.username, sessionID: req.sessionID, redirect: to });
-        res.redirect(to);
+        console.log('[Auth] Login success:', {
+          user: user.id || user.username,
+          sessionID: req.sessionID,
+          redirect: redirectTo,
+          cookie: req.session?.cookie ? { secure: req.session.cookie.secure, sameSite: req.session.cookie.sameSite } : null
+        });
+        res.redirect(redirectTo);
       });
     });
   })(req, res, next);
@@ -562,7 +589,11 @@ function startWeb() {
     console.log(`[Web] Dashboard running on port ${port} ✅`);
     console.log(`[Web] Asset version: ${assetVersion}`);
     console.log(`[Web] OAuth callback: ${callbackURL}`);
+    console.log(`[Web] OAuth client configured: ${discordClientId ? 'yes' : 'no'}`);
     console.log(`[Web] Production mode: ${isProduction ? 'yes' : 'no'}`);
+    if (!discordClientId || !discordClientSecret) {
+      console.warn('[Web] Missing Discord OAuth env vars. Set DISCORD_CLIENT_ID / DISCORD_CLIENT_SECRET or CLIENT_ID / CLIENT_SECRET.');
+    }
   });
 }
 

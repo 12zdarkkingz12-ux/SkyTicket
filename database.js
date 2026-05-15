@@ -3,6 +3,10 @@ const session = require('express-session');
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
+function logSessionStoreError(method, sid, err) {
+  console.error(`[SessionStore] ${method} failed${sid ? ` (sid=${sid})` : ''}:`, err?.message || err);
+}
+
 // ─── Helper ──────────────────────────────────────────────────────────────────
 function handle(result) {
   if (result.error) throw result.error;
@@ -15,31 +19,48 @@ function handle(result) {
 class SupabaseStore extends session.Store {
   async get(sid, cb) {
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('sessions').select('sess,expire').eq('sid', sid).maybeSingle();
-      if (!data || new Date(data.expire) < new Date()) return cb(null, null);
-      cb(null, data.sess);
-    } catch (e) { cb(null, null); }
+      if (error) throw error;
+      if (!data) return cb(null, null);
+      if (data.expire && new Date(data.expire) < new Date()) return cb(null, null);
+      cb(null, data.sess || null);
+    } catch (e) {
+      logSessionStoreError('get', sid, e);
+      cb(null, null);
+    }
   }
   async set(sid, sess, cb) {
     try {
       const expire = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
-      await supabase.from('sessions').upsert({ sid, sess, expire });
+      const { error } = await supabase.from('sessions').upsert({ sid, sess, expire }, { onConflict: 'sid' });
+      if (error) throw error;
       cb(null);
-    } catch (e) { cb(e); }
+    } catch (e) {
+      logSessionStoreError('set', sid, e);
+      cb(e);
+    }
   }
   async destroy(sid, cb) {
     try {
-      await supabase.from('sessions').delete().eq('sid', sid);
+      const { error } = await supabase.from('sessions').delete().eq('sid', sid);
+      if (error) throw error;
       cb(null);
-    } catch (e) { cb(e); }
+    } catch (e) {
+      logSessionStoreError('destroy', sid, e);
+      cb(e);
+    }
   }
   async touch(sid, sess, cb) {
     try {
       const expire = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-      await supabase.from('sessions').update({ expire }).eq('sid', sid);
+      const { error } = await supabase.from('sessions').upsert({ sid, sess, expire }, { onConflict: 'sid' });
+      if (error) throw error;
       cb(null);
-    } catch (e) { cb(e); }
+    } catch (e) {
+      logSessionStoreError('touch', sid, e);
+      cb(e);
+    }
   }
 }
 
