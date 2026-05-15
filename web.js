@@ -17,7 +17,8 @@ const env = (...names) => {
 };
 
 const assetVersionRaw = env('ASSET_VERSION');
-const assetVersion = /^\d+$/.test(String(assetVersionRaw || '').trim()) ? String(assetVersionRaw).trim() : '1';
+const assetVersionCandidate = String(assetVersionRaw || '').trim();
+const assetVersion = Number.isInteger(Number(assetVersionCandidate)) && assetVersionCandidate !== '' ? assetVersionCandidate : '1';
 
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
