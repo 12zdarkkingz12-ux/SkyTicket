@@ -34,12 +34,11 @@ async function notifyPromotionThresholds(client, guildId, userId, beforePoints, 
         .setColor('#dc2626')
         .setTitle(`📌 تنبيه ترقية — ${rule.label || 'تنبيه ترقية'}`)
         .setDescription([
-          `${member ? member : `<@${userId}>`} وصل إلى **${end}** نقطة.`,
+          `${member ? `<@${member.id}>` : `<@${userId}>`} وصل إلى **${end}** نقطة.`,
           `الشرط المحدد: **${threshold}** نقطة.`,
           context.note ? `
 ${context.note}` : ''
-        ].filter(Boolean).join('
-'))
+        ].filter(Boolean).join('\n'))
         .addFields(
           { name: 'العضو', value: `<@${userId}>`, inline: true },
           { name: 'النقاط', value: `${end}`, inline: true },
