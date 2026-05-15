@@ -2,16 +2,18 @@
 <html dir="rtl" lang="ar">
 <head>
   <meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>لوحة التحكم — SkyTicket</title>
-  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/style.css?v=<%= assetVersion %>">
 </head>
 <body>
   <div class="dashboard-shell">
     <div class="dashboard-card">
       <div class="dashboard-brand">
         <div class="dashboard-logo">
-          <img src="/logo.png" alt="SkyTicket" onerror="this.style.display='none'">
+          <img src="/logo.png?v=<%= assetVersion %>" alt="SkyTicket" onerror="this.style.display='none'">
         </div>
         <div>
           <div class="dashboard-title">SkyTicket</div>
