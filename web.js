@@ -252,6 +252,16 @@ app.get('/dashboard', ensureAuth, async (req, res) => {
   }
 });
 
+// ── Help Page ────────────────────────────────────────────────────────────────
+app.get('/guild/:id/help', ensureAuth, ensureGuildAdminPage, (req, res) => {
+  const guild = req.guild;
+  res.render('help', {
+    guild: { id: guild.id, name: guild.name },
+    assetVersion
+  });
+});
+
+// ── Guild Dashboard ──────────────────────────────────────────────────────────
 app.get('/guild/:id', ensureAuth, ensureGuildAdminPage, async (req, res) => {
   try {
     const guild     = req.guild;

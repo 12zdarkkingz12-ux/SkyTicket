@@ -454,18 +454,26 @@ async function handleCommand(interaction, client) {
     }
 
     if (sub === 'transfer') {
-      const isAdmin = interaction.member.permissions.has('Administrator');
+      const isAdmin    = interaction.member.permissions.has('Administrator');
+      const isStaffChk = await db.isStaff(interaction.guild.id, interaction.user.id);
+      if (!isAdmin && !isStaffChk)
+        return interaction.reply({ content: '❌ هذا الأمر للدعم فقط.', ephemeral: true });
       if (!isAdmin && ticket.claimed_by !== interaction.user.id)
         return interaction.reply({ content: '❌ يمكنك فقط نقل التذاكر التي استلمتها.', ephemeral: true });
 
-      const newStaff  = interaction.options.getUser('staff');
+      const newStaff   = interaction.options.getUser('staff');
       const isNewStaff = await db.isStaff(interaction.guild.id, newStaff.id);
       if (!isNewStaff) return interaction.reply({ content: '❌ هذا المستخدم ليس في فريق الدعم.', ephemeral: true });
 
       await db.claimTicket(interaction.channel.id, newStaff.id);
-      await interaction.channel.permissionOverwrites.create(newStaff, { ViewChannel: true, SendMessages: true });
 
-      const embed = new EmbedBuilder().setColor('#dc2626')
+      // نفس منطق قفل الصلاحيات الموجود في claim
+      const { lockTicketToStaff } = require('./tickets');
+      await lockTicketToStaff(interaction.channel, interaction.guild.id, newStaff.id, ticket.user_id);
+
+      await db.addLog(interaction.guild.id, 'TICKET_TRANSFER', interaction.user.id, newStaff.id, { ticket_id: ticket.id });
+
+      const embed = new EmbedBuilder().setColor('#3b82f6')
         .setDescription(`🔄 تم نقل التذكرة من ${interaction.user} إلى ${newStaff}`);
       return interaction.reply({ embeds: [embed] });
     }
@@ -476,6 +484,7 @@ async function handleCommand(interaction, client) {
       if (!staffCheck && !isAdmin) return interaction.reply({ content: '❌ هذا الأمر للدعم فقط.', ephemeral: true });
       const text = interaction.options.getString('text');
       await db.addNote(ticket.id, interaction.guild.id, interaction.user.id, text);
+      await db.addLog(interaction.guild.id, 'TICKET_NOTE', interaction.user.id, ticket.user_id, { ticket_id: ticket.id, note: text });
 
       const embed = new EmbedBuilder()
         .setColor('#6366f1')
@@ -522,32 +531,6 @@ async function handleCommand(interaction, client) {
 
 // ─── Send panel embed ─────────────────────────────────────────────────────────
 async function sendPanelEmbed(channel, panel, guild) {
-  const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
-  const db = require('./database');
-
-function getRankInfo(points = 0) {
-  const value = Number(points) || 0;
-  if (value >= 1500) return { name: '🏆 أسطورة', min: 1500, next: null };
-  if (value >= 700)  return { name: '💎 خبير', min: 700, next: 1500 };
-  if (value >= 300)  return { name: '🌟 محترف', min: 300, next: 700 };
-  if (value >= 100)  return { name: '⚡ نشيط', min: 100, next: 300 };
-  return { name: '🌱 مبتدئ', min: 0, next: 100 };
-}
-
-function formatDuration(seconds) {
-  if (seconds == null || Number.isNaN(seconds)) return '—';
-  const s = Math.max(0, Math.round(seconds));
-  const m = Math.floor(s / 60);
-  const rem = s % 60;
-  if (m >= 60) {
-    const h = Math.floor(m / 60);
-    const mm = m % 60;
-    return `${h}س ${mm}د`;
-  }
-  return `${m}د ${rem}ث`;
-}
-
-
   const styleMap = { DANGER: ButtonStyle.Danger, PRIMARY: ButtonStyle.Primary, SECONDARY: ButtonStyle.Secondary, SUCCESS: ButtonStyle.Success };
 
   const embed = new EmbedBuilder()

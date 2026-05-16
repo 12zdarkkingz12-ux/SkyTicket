@@ -64,6 +64,64 @@ function buildClaimedRow(channelId, panel) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+//  SHARED PERMISSION HELPERS
+// ════════════════════════════════════════════════════════════════════════════
+
+// قفل القناة: فقط المستلم وصاحب التكت يقدرون يتكلمون
+async function lockTicketToStaff(channel, guildId, claimerId, ticketUserId) {
+  try {
+    const guildData = await db.getGuild(guildId);
+    const staffList = await db.getStaff(guildId);
+    if (guildData?.staff_role_id)
+      await channel.permissionOverwrites.edit(guildData.staff_role_id, { SendMessages: false }).catch(() => {});
+    for (const s of staffList) {
+      if (s.user_id === claimerId) continue;
+      await channel.permissionOverwrites.edit(s.user_id, { SendMessages: false }).catch(() => {});
+    }
+    await channel.permissionOverwrites.edit(claimerId,    { ViewChannel: true, SendMessages: true, ReadMessageHistory: true }).catch(() => {});
+    await channel.permissionOverwrites.edit(ticketUserId, { ViewChannel: true, SendMessages: true, ReadMessageHistory: true }).catch(() => {});
+  } catch (e) { console.error('[LockTicket]', e); }
+}
+
+// فتح القناة: رجّع الصلاحيات لكل الستاف
+async function unlockTicketForAll(channel, guildId) {
+  try {
+    const guildData = await db.getGuild(guildId);
+    const staffList = await db.getStaff(guildId);
+    if (guildData?.staff_role_id)
+      await channel.permissionOverwrites.edit(guildData.staff_role_id, { SendMessages: true }).catch(() => {});
+    for (const s of staffList)
+      await channel.permissionOverwrites.edit(s.user_id, { ViewChannel: true, SendMessages: true, ReadMessageHistory: true }).catch(() => {});
+  } catch (e) { console.error('[UnlockTicket]', e); }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  EVENT LOG HELPER  (open / claim / delete → log_channel_id)
+// ════════════════════════════════════════════════════════════════════════════
+async function sendEventLog(guildId, type, actorId, ticket, extra = {}) {
+  try {
+    const { sendLog } = require('./bot');
+    const meta = {
+      OPEN:   { color: '#22c55e', title: '🎫 تذكرة جديدة فُتحت' },
+      CLAIM:  { color: '#3b82f6', title: '🙋 تم استلام التذكرة' },
+      DELETE: { color: '#dc2626', title: '🗑️ تذكرة محذوفة نهائياً' },
+    };
+    const { color, title } = meta[type] || { color: '#6b7280', title: type };
+    const embed = new EmbedBuilder()
+      .setColor(color)
+      .setTitle(title)
+      .addFields(
+        { name: '🎫 رقم التذكرة',  value: `#${ticket.id}`,        inline: true },
+        { name: '👤 صاحب التذكرة', value: `<@${ticket.user_id}>`, inline: true },
+        { name: '🛡️ المنفذ',        value: `<@${actorId}>`,        inline: true }
+      );
+    if (extra.panel) embed.addFields({ name: '📋 اللوحة', value: extra.panel, inline: true });
+    embed.setTimestamp().setFooter({ text: 'SkyTicket • سجل الأحداث' });
+    await sendLog(guildId, embed);
+  } catch (e) { console.error('[EventLog]', e); }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 //  MAIN INTERACTION ROUTER
 // ════════════════════════════════════════════════════════════════════════════
 async function handleInteraction(interaction, client) {
@@ -235,6 +293,7 @@ async function createTicketChannel(interaction, client, panel, reason) {
   await channel.send({ content, embeds: [embed], components: [row] });
 
   await db.addLog(guild.id, 'TICKET_OPEN', user.id, null, { ticket_id: newTicket.id, panel_id: panel.id });
+  await sendEventLog(guild.id, 'OPEN', user.id, newTicket, { panel: panel.name });
   await interaction.editReply({ content: `✅ تم فتح تذكرتك: ${channel}` });
 }
 
@@ -265,6 +324,10 @@ async function handleClaimTicket(interaction, client) {
 
   const panel = ticket.panel_id ? await db.getPanel(ticket.panel_id) : null;
 
+  // ─── Lock channel: only claimer + ticket owner can send ──────────────────
+  await lockTicketToStaff(interaction.channel, interaction.guild.id, interaction.user.id, ticket.user_id);
+  // ─────────────────────────────────────────────────────────────────────────
+
   const embed = new EmbedBuilder()
     .setColor('#22c55e')
     .setDescription(`✅ تم استلام التذكرة بواسطة ${interaction.user}\n\nسيتم مساعدتك في أقرب وقت ممكن.`);
@@ -274,6 +337,7 @@ async function handleClaimTicket(interaction, client) {
   await interaction.update({ components: [row] });
   await interaction.channel.send({ embeds: [embed] });
   await db.addLog(interaction.guild.id, 'TICKET_CLAIM', interaction.user.id, ticket.user_id, { ticket_id: ticket.id });
+  await sendEventLog(interaction.guild.id, 'CLAIM', interaction.user.id, ticket);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -289,6 +353,10 @@ async function handleUnclaimTicket(interaction, client) {
     return interaction.reply({ content: '❌ يمكنك فقط إلغاء استلام التذاكر التي استلمتها.', ephemeral: true });
 
   await db.unclaimTicket(channelId);
+
+  // ─── Unlock channel: restore SendMessages for all staff ──────────────────
+  await unlockTicketForAll(interaction.channel, interaction.guild.id);
+  // ─────────────────────────────────────────────────────────────────────────
 
   const panel = ticket.panel_id ? await db.getPanel(ticket.panel_id) : null;
   const row   = buildOpenRow(channelId, panel);
@@ -660,13 +728,23 @@ async function handleDeleteTicket(interaction, client) {
 
 async function handleConfirmDelete(interaction, client) {
   const channelId = interaction.customId.split(':')[1];
+  const ticket    = await db.getTicket(channelId);
   const channel   = interaction.channel;
+
+  // إعادة التحقق من الصلاحيات (حماية إضافية)
+  const isStaff = await checkStaff(interaction.guild.id, interaction.member);
+  const isAdmin = interaction.member.permissions.has('Administrator');
+  if (!isStaff && !isAdmin)
+    return interaction.update({ content: '❌ ليس لديك صلاحية حذف هذه التذكرة.', embeds: [], components: [] });
 
   await interaction.update({
     content: '🗑️ **سيتم حذف القناة خلال 3 ثواني...**',
     embeds: [],
     components: []
   });
+
+  // سجل الحدث قبل الحذف
+  if (ticket) await sendEventLog(interaction.guild.id, 'DELETE', interaction.user.id, ticket);
 
   setTimeout(async () => {
     try {
@@ -678,4 +756,4 @@ async function handleConfirmDelete(interaction, client) {
 }
 
 // ─── Export ────────────────────────────────────────────────────────────────
-module.exports = { handleInteraction, sendPanelEmbed: require('./commands').sendPanelEmbed };
+module.exports = { handleInteraction, sendPanelEmbed: require('./commands').sendPanelEmbed, lockTicketToStaff, unlockTicketForAll };
