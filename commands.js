@@ -229,17 +229,44 @@ async function handleCommand(interaction, client) {
     }
 
     if (sub === 'send') {
-      const panelId = interaction.options.getString('panel_id')?.trim();
-      const ch      = interaction.options.getChannel('channel') || interaction.channel;
+      const rawInput = interaction.options.getString('panel_id')?.trim();
+      const ch       = interaction.options.getChannel('channel') || interaction.channel;
       await interaction.deferReply({ ephemeral: true });
 
-      const panel = await db.getPanelByRef(interaction.guild.id, panelId);
-      if (!panel)
-        return interaction.editReply({ content: '❌ لوحة غير موجودة. تأكد من الرقم أو المعرف.' });
+      // دعم أكثر من ID مفصولة بمسافة: "1 2 3" أو "1,2,3"
+      const ids = rawInput.split(/[\s,]+/).filter(Boolean);
 
-      const { sendPanelEmbed } = require('./tickets');
-      await sendPanelEmbed(ch, panel, interaction.guild);
-      return interaction.editReply({ content: `✅ تم إرسال اللوحة **#${panel.panel_number || '—'}** في ${ch}.` });
+      if (ids.length === 0)
+        return interaction.editReply({ content: '❌ أدخل معرف لوحة واحدة على الأقل.' });
+
+      // جيب أول لوحة — هي الواجهة الرئيسية
+      const mainPanel = await db.getPanelByRef(interaction.guild.id, ids[0]);
+      if (!mainPanel)
+        return interaction.editReply({ content: `❌ اللوحة **${ids[0]}** غير موجودة.` });
+
+      const { sendPanelEmbed, sendMultiPanelEmbed } = require('./tickets');
+
+      if (ids.length === 1) {
+        // سلوك قديم — لوحة واحدة
+        await sendPanelEmbed(ch, mainPanel, interaction.guild);
+        return interaction.editReply({ content: `✅ تم إرسال اللوحة **#${mainPanel.panel_number || '—'}** في ${ch}.` });
+      }
+
+      // أكثر من لوحة — جيب الباقي كأزرار إضافية
+      const extraPanels = [];
+      const missing     = [];
+      for (const id of ids.slice(1)) {
+        const p = await db.getPanelByRef(interaction.guild.id, id);
+        if (p) extraPanels.push(p);
+        else   missing.push(id);
+      }
+
+      await sendMultiPanelEmbed(ch, mainPanel, extraPanels, interaction.guild);
+
+      const missNote = missing.length ? `\n⚠️ لوحات غير موجودة: ${missing.join(', ')}` : '';
+      return interaction.editReply({
+        content: `✅ تم إرسال اللوحة المدمجة في ${ch}. (رئيسية + ${extraPanels.length} أزرار)${missNote}`
+      });
     }
 
     if (sub === 'list') {

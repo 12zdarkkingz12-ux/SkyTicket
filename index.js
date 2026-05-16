@@ -9,7 +9,7 @@ const { version } = require('./package.json');
 console.log(`
  ╔═══════════════════════════════╗
  ║   🔴 SkyTicket  v2.2.0   ║
- ║      Developed by Dark        ║
+ ║      Developed by Dark 🖤      ║
  ╚═══════════════════════════════╝
 `);
 

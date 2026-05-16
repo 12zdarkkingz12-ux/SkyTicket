@@ -756,4 +756,45 @@ async function handleConfirmDelete(interaction, client) {
 }
 
 // ─── Export ────────────────────────────────────────────────────────────────
-module.exports = { handleInteraction, sendPanelEmbed: require('./commands').sendPanelEmbed, lockTicketToStaff, unlockTicketForAll };
+// ════════════════════════════════════════════════════════════════════════════
+//  MULTI-PANEL EMBED  (لوحة رئيسية + لوحات إضافية كأزرار)
+// ════════════════════════════════════════════════════════════════════════════
+async function sendMultiPanelEmbed(channel, mainPanel, extraPanels, guild) {
+  const styleMap = { DANGER: ButtonStyle.Danger, PRIMARY: ButtonStyle.Primary, SECONDARY: ButtonStyle.Secondary, SUCCESS: ButtonStyle.Success };
+
+  // Embed من اللوحة الرئيسية
+  const embed = new EmbedBuilder()
+    .setColor(mainPanel.embed_color || '#dc2626')
+    .setTitle(`${mainPanel.embed_title || 'فتح تذكرة'}${mainPanel.panel_number ? ` • #${mainPanel.panel_number}` : ''}`)
+    .setDescription(mainPanel.embed_description || '');
+
+  if (mainPanel.embed_footer)    embed.setFooter({ text: mainPanel.embed_footer });
+  if (mainPanel.embed_image)     embed.setImage(mainPanel.embed_image);
+  if (mainPanel.embed_thumbnail) embed.setThumbnail(mainPanel.embed_thumbnail);
+
+  // كل الأزرار في صف واحد (أو أكثر لو زادوا عن 5)
+  const allPanels = [mainPanel, ...extraPanels];
+  const rows      = [];
+
+  for (let i = 0; i < allPanels.length; i += 5) {
+    const slice = allPanels.slice(i, i + 5);
+    const row   = new ActionRowBuilder().addComponents(
+      slice.map(p => {
+        const emoji = (p.button_emoji || '').trim();
+        const label = (p.button_label || p.name || 'فتح تذكرة').trim();
+        return new ButtonBuilder()
+          .setCustomId(`open_ticket:${p.id}`)
+          .setLabel(emoji ? `${emoji} ${label}` : label)
+          .setStyle(styleMap[p.button_style] || ButtonStyle.Danger);
+      })
+    );
+    rows.push(row);
+  }
+
+  const msg = await channel.send({ embeds: [embed], components: rows });
+  // سجّل الرسالة للوحة الرئيسية فقط
+  await db.setPanelMessage(mainPanel.id, msg.id, channel.id);
+  return msg;
+}
+
+module.exports = { handleInteraction, lockTicketToStaff, unlockTicketForAll, sendMultiPanelEmbed };
