@@ -94,13 +94,14 @@
       ].filter(Boolean);
       channelSelects.forEach(select => {
         const selected = select.dataset.selected || select.value || '';
-        setSelectOptions(select, channels, selected, '— اختر القناة —', ch => `${ch.name} (${ch.id})`);
+        setSelectOptions(select, channels, selected, '— اختر القناة —', ch => `#${ch.name}`);
       });
 
       const roleSelects = [
         document.getElementById('p-mention-role'),
         document.getElementById('edit-p-mention-role'),
         document.getElementById('s-promo-role'),
+        document.getElementById('s-points-role'),
       ].filter(Boolean);
       roleSelects.forEach(select => setSelectOptions(select, roles, select.value, '— بدون —', role => `${role.name}${role.color && role.color !== '#000000' ? ` • ${role.color}` : ''}`));
 
@@ -372,12 +373,15 @@
           <div class="panel-meta">
             <span>🆔 #<%= p.panel_number || (panels.findIndex(x => x.id === p.id) + 1) %></span>
             <span>🏷️ <%= p.name %></span>
+            <% if (p.category_open_name)  { %><span>📂 <%= p.category_open_name %></span><% } %>
+            <% if (p.category_close_name) { %><span>📁 <%= p.category_close_name %></span><% } %>
             <% if (p.require_reason) { %><span>📝 يتطلب سبباً</span><% } %>
-            <% if (p.dm_on_close) { %><span>📩 DM عند الإغلاق</span><% } %>
-            <% if (p.mention_role) { %><span>🔔 ذكر الرتبة</span><% } %>
+            <% if (p.dm_on_close)    { %><span>📩 DM عند الإغلاق</span><% } %>
+            <% if (p.mention_role_name)   { %><span>🔔 <%= p.mention_role_name %></span>
+            <% } else if (p.mention_role) { %><span>🔔 ذكر الرتبة</span><% } %>
           </div>
-          <div style="margin:8px 0 0;font-size:11px;color:var(--text-muted);word-break:break-all">
-            ID: <code><%= p.id %></code>
+          <div style="margin:8px 0 0;font-size:11px;color:var(--text-muted)">
+            <code style="background:var(--bg3);padding:1px 5px;border-radius:3px;user-select:all" title="انسخ المعرف لاستخدامه في /panel send">#<%= p.panel_number || '—' %></code>
           </div>
           <div class="panel-actions">
             <button class="btn btn-ghost btn-sm" onclick="openPanelEdit('<%= p.id %>')">✏️ تعديل</button>
@@ -858,6 +862,32 @@
 
       <div class="mt-16"></div>
 
+      <!-- Points Role (Auto Sync) -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">⭐ رتبة نظام النقاط (تلقائي)</div>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>رتبة الفريق في لوحة النقاط</label>
+            <select id="s-points-role" data-selected="<%= guildData.points_role_id || '' %>">
+              <option value="">— بدون (إضافة يدوية فقط) —</option>
+            </select>
+            <p style="font-size:12px;color:var(--text-dim);margin-top:6px">
+              كل من يملك هذه الرتبة يُضاف تلقائياً للوحة النقاط، وعند نزع الرتبة يختفي تلقائياً.
+            </p>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <button class="btn btn-secondary" type="button" onclick="syncPointsRole()" style="flex-shrink:0">
+              🔄 مزامنة الأعضاء الحاليين
+            </button>
+            <span style="font-size:12px;color:var(--text-dim)">اضغط بعد حفظ الإعدادات لإضافة الأعضاء الموجودين مسبقاً</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-16"></div>
+
       <!-- Promotion Notifications -->
       <div class="card">
         <div class="card-header">
@@ -1101,7 +1131,7 @@
             </div>
             <div style="display:flex;gap:12px;align-items:flex-start">
               <div style="width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">2</div>
-              <div><strong>الإعدادات</strong> — في تبويب الإعدادات، حدد قناة السجلات وأضف رتبة فريق الدعم (staff_role_id)</div>
+              <div><strong>الإعدادات</strong> — في تبويب الإعدادات، حدد قناة السجلات وأضف رتبة فريق الدعم</div>
             </div>
             <div style="display:flex;gap:12px;align-items:flex-start">
               <div style="width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">3</div>
@@ -1148,7 +1178,7 @@
           <div style="padding:14px;background:var(--bg3);border-radius:8px;border-right:3px solid var(--warning)">
             <strong style="color:var(--warning)">⚠️ أعضاء الدعم لا يرون التذاكر</strong><br>
             <div style="font-size:13px;margin-top:6px;color:var(--text-muted)">
-              الحل: أضف رتبة فريق الدعم في الإعدادات (staff_role_id)، أو أضف الأعضاء يدوياً بـ <code>/staff add</code>
+              الحل: أضف رتبة فريق الدعم في <strong>الإعدادات</strong>، أو أضف الأعضاء يدوياً بـ <code>/staff add</code>
             </div>
           </div>
 
@@ -1162,7 +1192,7 @@
           <div style="padding:14px;background:var(--bg3);border-radius:8px;border-right:3px solid var(--warning)">
             <strong style="color:var(--warning)">⚠️ التذاكر لا تنتقل للتصنيف عند الإغلاق</strong><br>
             <div style="font-size:13px;margin-top:6px;color:var(--text-muted)">
-              الحل: تأكد من تحديد category_close في إعدادات اللوحة، وأن البوت لديه صلاحية Manage Channels
+              الحل: تأكد من تحديد <strong>تصنيف التذاكر المغلقة</strong> في إعدادات اللوحة (زر ✏️)، وأن البوت لديه صلاحية Manage Channels
             </div>
           </div>
 
@@ -1198,6 +1228,195 @@
               <tr><td style="padding:8px"><code>SESSION_SECRET</code></td><td style="padding:8px;color:var(--text-muted)">كلمة سر الجلسة</td><td style="padding:8px;color:var(--text-muted)">أي نص عشوائي طويل</td></tr>
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- Points Role Guide -->
+      <div class="card help-section" data-tags="رتبة نقاط تلقائي مزامنة دور">
+        <div class="card-header"><div class="card-title">🔄 نظام الرتبة التلقائية للنقاط</div></div>
+        <div style="padding:16px;font-size:14px;display:flex;flex-direction:column;gap:14px">
+          <div style="padding:12px;background:var(--accent-bg);border:1px solid var(--accent);border-radius:8px">
+            <strong>🆕 ميزة جديدة:</strong> بدل ما تضيف كل عضو يدوياً، تحدد رتبة Discord واحدة وكل من يملكها يُضاف تلقائياً للوحة النقاط!
+          </div>
+          <div>
+            <strong>خطوات الإعداد:</strong>
+            <ol style="margin:8px 0 0;padding-right:20px;display:flex;flex-direction:column;gap:6px">
+              <li>اذهب لتبويب <strong>الإعدادات</strong></li>
+              <li>في قسم <strong>رتبة نظام النقاط</strong>، اختر الرتبة من القائمة</li>
+              <li>اضغط <strong>حفظ الإعدادات</strong></li>
+              <li>اضغط <strong>مزامنة الأعضاء الحاليين</strong> لإضافة من عندهم الرتبة مسبقاً دفعة واحدة</li>
+            </ol>
+          </div>
+          <div>
+            <strong>كيف تعمل تلقائياً بعد الإعداد؟</strong>
+            <ul style="margin:8px 0 0;padding-right:20px;display:flex;flex-direction:column;gap:4px">
+              <li>✅ عضو أُعطي الرتبة → يُضاف للوحة النقاط فوراً</li>
+              <li>❌ عضو نُزعت منه الرتبة → يختفي من اللوحة فوراً</li>
+              <li>🔄 عند إعادة تشغيل البوت → تتم مزامنة تلقائية لكل الأعضاء</li>
+            </ul>
+          </div>
+          <div style="padding:12px;background:var(--bg3);border-radius:8px;font-size:13px;color:var(--text-muted)">
+            <strong>⚠️ ملاحظة:</strong> المزامنة التلقائية تشتغل فقط إذا البوت شغال وقت تغيير الرتبة. إذا غيّرت رتبة أعضاء وهو متوقف، اضغط زر المزامنة اليدوية بعد ما يرجع.
+          </div>
+        </div>
+      </div>
+
+      <!-- Ticket Lifecycle -->
+      <div class="card help-section" data-tags="تذكرة دورة حياة فتح إغلاق استلام">
+        <div class="card-header"><div class="card-title">🎫 دورة حياة التذكرة</div></div>
+        <div style="padding:16px;display:flex;flex-direction:column;gap:0">
+
+          <div style="display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--border2)">
+            <div style="width:36px;height:36px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🟢</div>
+            <div><div style="font-weight:600;margin-bottom:4px">فتح التذكرة</div>
+            <div style="font-size:13px;color:var(--text-muted)">المستخدم يضغط زر اللوحة ← تُنشأ قناة خاصة تلقائياً ← يُذكر فريق الدعم (إذا مفعّل) ← رسالة الترحيب مع أزرار الإدارة</div></div>
+          </div>
+
+          <div style="display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--border2)">
+            <div style="width:36px;height:36px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">✋</div>
+            <div><div style="font-weight:600;margin-bottom:4px">استلام التذكرة</div>
+            <div style="font-size:13px;color:var(--text-muted)">عضو الدعم يضغط "استلام" ← تُسجَّل النقاط والوقت ← تتغير الحالة لـ "مستلمة" ← النقاط تُحسب بناءً على سرعة الاستجابة</div></div>
+          </div>
+
+          <div style="display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--border2)">
+            <div style="width:36px;height:36px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📌</div>
+            <div><div style="font-weight:600;margin-bottom:4px">إدارة التذكرة</div>
+            <div style="font-size:13px;color:var(--text-muted)">تغيير الأولوية • نقل لعضو آخر عبر <code>/ticket transfer</code> • إضافة/إزالة مستخدمين • ملاحظات داخلية سرية عبر <code>/ticket note</code></div></div>
+          </div>
+
+          <div style="display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--border2)">
+            <div style="width:36px;height:36px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🔒</div>
+            <div><div style="font-weight:600;margin-bottom:4px">إغلاق التذكرة</div>
+            <div style="font-size:13px;color:var(--text-muted)">الضغط على "إغلاق" ← تأكيد (+ سبب إذا مطلوب) ← تنتقل القناة لتصنيف المغلقة ← المستخدم يقيّم الخدمة ← تُرسل نسخة نصية إن كانت مفعّلة</div></div>
+          </div>
+
+          <div style="display:flex;gap:12px;padding:12px 0">
+            <div style="width:36px;height:36px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">⏱️</div>
+            <div><div style="font-weight:600;margin-bottom:4px">إغلاق تلقائي</div>
+            <div style="font-size:13px;color:var(--text-muted)">بعد المدة المحددة (افتراضي 72 ساعة) بدون نشاط ← تحذير ← إغلاق تلقائي بعد المدة الإضافية. يمكن تعديل المدد من الإعدادات.</div></div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Common Errors -->
+      <div class="card help-section" data-tags="خطأ error مشكلة صلاحيات لوحة تذكرة">
+        <div class="card-header"><div class="card-title">🔧 الأخطاء الشائعة وحلولها</div></div>
+        <div style="padding:16px;display:flex;flex-direction:column;gap:12px">
+
+          <div style="padding:14px;background:var(--bg3);border-radius:8px;border-right:3px solid var(--danger)">
+            <strong style="color:var(--danger)">❌ "لوحة غير موجودة. تأكد من الرقم أو المعرف"</strong><br>
+            <div style="font-size:13px;margin-top:6px;color:var(--text-muted)">استخدم <code>/panel list</code> وشوف الرقم المكتوب قبل الاسم (1، 2، 3...) ثم: <code>/panel send panel_id:1</code></div>
+          </div>
+
+          <div style="padding:14px;background:var(--bg3);border-radius:8px;border-right:3px solid var(--danger)">
+            <strong style="color:var(--danger)">❌ "فشل تغيير اسم القناة. تأكد من صلاحيات البوت"</strong><br>
+            <div style="font-size:13px;margin-top:6px;color:var(--text-muted)">تأكد أن رتبة البوت في السيرفر أعلى من قنوات التذاكر، وأن لديه صلاحية <strong>Manage Channels</strong></div>
+          </div>
+
+          <div style="padding:14px;background:var(--bg3);border-radius:8px;border-right:3px solid var(--danger)">
+            <strong style="color:var(--danger)">❌ البوت لا يرد على الأوامر (لا تظهر عند كتابة /)</strong><br>
+            <div style="font-size:13px;margin-top:6px;color:var(--text-muted)">
+              ١- تأكد أن <code>GUILD_ID</code> في .env صحيح<br>
+              ٢- أعد تشغيل البوت<br>
+              ٣- انتظر دقيقة لـ Discord يحدّث الأوامر<br>
+              ٤- تأكد أن للبوت صلاحية <strong>Use Application Commands</strong> في السيرفر
+            </div>
+          </div>
+
+          <div style="padding:14px;background:var(--bg3);border-radius:8px;border-right:3px solid var(--warning)">
+            <strong style="color:var(--warning)">⚠️ الرد التلقائي لا يعمل</strong><br>
+            <div style="font-size:13px;margin-top:6px;color:var(--text-muted)">الردود التلقائية تعمل فقط <strong>داخل قنوات التذاكر المفتوحة</strong>. تأكد من إضافة الكلمة في تبويب "الردود التلقائية" وأن نوع المطابقة صحيح.</div>
+          </div>
+
+          <div style="padding:14px;background:var(--bg3);border-radius:8px;border-right:3px solid var(--warning)">
+            <strong style="color:var(--warning)">⚠️ أعضاء الدعم لا يرون التذاكر</strong><br>
+            <div style="font-size:13px;margin-top:6px;color:var(--text-muted)">أضف رتبة فريق الدعم في <strong>الإعدادات ← رتبة فريق الدعم</strong>، أو أضف الأعضاء يدوياً بـ <code>/staff add @عضو</code></div>
+          </div>
+
+          <div style="padding:14px;background:var(--bg3);border-radius:8px;border-right:3px solid var(--warning)">
+            <strong style="color:var(--warning)">⚠️ التذاكر لا تنتقل للتصنيف عند الإغلاق</strong><br>
+            <div style="font-size:13px;margin-top:6px;color:var(--text-muted)">في إعدادات اللوحة (زر ✏️) تأكد من تحديد <strong>تصنيف التذاكر المغلقة</strong>، وأن البوت لديه صلاحية Manage Channels في ذلك التصنيف.</div>
+          </div>
+
+          <div style="padding:14px;background:var(--bg3);border-radius:8px;border-right:3px solid var(--warning)">
+            <strong style="color:var(--warning)">⚠️ لوحة النقاط فاضية رغم وجود فريق دعم</strong><br>
+            <div style="font-size:13px;margin-top:6px;color:var(--text-muted)">إذا استخدمت نظام الرتبة التلقائية، اذهب للإعدادات واضغط <strong>مزامنة الأعضاء الحاليين</strong>. إذا تضيف يدوياً، استخدم <code>/staff add @عضو</code></div>
+          </div>
+
+          <div style="padding:14px;background:var(--bg3);border-radius:8px;border-right:3px solid var(--warning)">
+            <strong style="color:var(--warning)">⚠️ النقاط لا تُحتسب عند إغلاق التذكرة</strong><br>
+            <div style="font-size:13px;margin-top:6px;color:var(--text-muted)">النقاط تُحتسب فقط عند <strong>أول رد من عضو الدعم</strong> داخل التذكرة. تأكد أن العضو مضاف لجدول الدعم وأن رسالته الأولى كانت بعد فتح التذكرة.</div>
+          </div>
+
+          <div style="padding:14px;background:var(--bg3);border-radius:8px;border-right:3px solid var(--warning)">
+            <strong style="color:var(--warning)">⚠️ رسالة الخطأ: "Missing Permissions"</strong><br>
+            <div style="font-size:13px;margin-top:6px;color:var(--text-muted)">البوت يحتاج الصلاحيات: <code>Manage Channels</code> • <code>Send Messages</code> • <code>Read Message History</code> • <code>View Channels</code> • <code>Manage Roles</code></div>
+          </div>
+
+          <div style="padding:14px;background:var(--bg3);border-radius:8px;border-right:3px solid var(--warning)">
+            <strong style="color:var(--warning)">⚠️ الـ Session تنتهي باستمرار (يُطلب تسجيل الدخول كل شوي)</strong><br>
+            <div style="font-size:13px;margin-top:6px;color:var(--text-muted)">تأكد من ضبط <code>SESSION_SECRET</code> في .env بنص عشوائي طويل وثابت، وأن الـ Callback URL في Developer Portal مطابق تماماً للرابط المستخدم.</div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- .env reference -->
+      <div class="card help-section" data-tags="env متغيرات بيئة token client guild supabase">
+        <div class="card-header"><div class="card-title">🔑 متغيرات البيئة (.env)</div></div>
+        <div style="padding:16px">
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead>
+              <tr style="border-bottom:1px solid var(--border)">
+                <th style="text-align:right;padding:8px;color:var(--text-muted)">المتغير</th>
+                <th style="text-align:right;padding:8px;color:var(--text-muted)">الوصف</th>
+                <th style="text-align:right;padding:8px;color:var(--text-muted)">أين تجده؟</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px"><code>TOKEN</code></td><td style="padding:8px;color:var(--text-muted)">توكن البوت</td><td style="padding:8px;color:var(--text-muted)">Developer Portal → Bot → Reset Token</td></tr>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px"><code>CLIENT_ID</code></td><td style="padding:8px;color:var(--text-muted)">معرف التطبيق</td><td style="padding:8px;color:var(--text-muted)">Developer Portal → General Information → Application ID</td></tr>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px"><code>GUILD_ID</code></td><td style="padding:8px;color:var(--text-muted)">معرف السيرفر</td><td style="padding:8px;color:var(--text-muted)">كليك يمين على السيرفر → Copy Server ID (Developer Mode مطلوب)</td></tr>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px"><code>SUPABASE_URL</code></td><td style="padding:8px;color:var(--text-muted)">رابط قاعدة البيانات</td><td style="padding:8px;color:var(--text-muted)">Supabase → Project Settings → API → Project URL</td></tr>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px"><code>SUPABASE_KEY</code></td><td style="padding:8px;color:var(--text-muted)">مفتاح Supabase</td><td style="padding:8px;color:var(--text-muted)">Supabase → Project Settings → API → anon public key</td></tr>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px"><code>CLIENT_SECRET</code></td><td style="padding:8px;color:var(--text-muted)">سر OAuth للداشبورد</td><td style="padding:8px;color:var(--text-muted)">Developer Portal → OAuth2 → Client Secret</td></tr>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px"><code>REDIRECT_URI</code></td><td style="padding:8px;color:var(--text-muted)">رابط العودة بعد تسجيل الدخول</td><td style="padding:8px;color:var(--text-muted)">مثال: <code>https://yourdomain.com/auth/callback</code></td></tr>
+              <tr><td style="padding:8px"><code>SESSION_SECRET</code></td><td style="padding:8px;color:var(--text-muted)">كلمة سر الجلسة</td><td style="padding:8px;color:var(--text-muted)">أي نص عشوائي طويل (لا تغيّره بعد التشغيل)</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Contact Dark -->
+      <div class="card help-section" data-tags="تواصل مساعدة دعم خطأ مشكلة دارك">
+        <div class="card-header">
+          <div class="card-title">🛠️ تواجه خطأ غير موجود هنا؟</div>
+        </div>
+        <div style="padding:16px">
+          <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px">
+              <div style="font-size:14px;color:var(--text-muted);margin-bottom:12px">
+                إذا واجهت خطأ غير مذكور في هذه الصفحة، أو البوت يتصرف بطريقة غير متوقعة، تواصل مع <strong>عمك دارك</strong> مباشرة عبر Discord.
+              </div>
+              <div style="font-size:13px;color:var(--text-dim);margin-bottom:16px">
+                💡 عند التواصل، أرفق: <strong>وصف المشكلة</strong> + <strong>الخطأ الظاهر</strong> (إذا موجود) + <strong>console.log</strong> من الخادم
+              </div>
+              <a href="https://discord.com/users/1290915770897006596" target="_blank" rel="noopener"
+                 style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;background:var(--accent);color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;transition:opacity .2s"
+                 onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+                💬 تواصل مع عمك دارك
+              </a>
+            </div>
+            <div style="text-align:center;padding:20px;background:var(--bg3);border-radius:12px;min-width:160px">
+              <div style="font-size:40px;margin-bottom:8px">🌙</div>
+              <div style="font-weight:700;font-size:15px">عمك دارك</div>
+              <div style="font-size:12px;color:var(--text-muted);margin-top:4px">مطوّر SkyTicket</div>
+            </div>
+          </div>
+          <div style="margin-top:16px;padding:12px;background:var(--bg3);border-radius:8px;font-size:12px;color:var(--text-dim)">
+            📋 <strong>لقراءة السجلات من الخادم:</strong> ابحث في console عن <code>[Error]</code> أو <code>[Interaction]</code> أو <code>[Bot]</code> — كل خطأ مُسجَّل تلقائياً مع وقته وتفاصيله
+          </div>
         </div>
       </div>
 
@@ -2267,6 +2486,7 @@ async function saveSettings() {
       auto_close_hours:     document.getElementById('s-auto-close')?.value,
       auto_close_warn_hours:document.getElementById('s-warn-hours')?.value,
       log_channel_id:       document.getElementById('s-log-channel')?.value,
+      points_role_id:       document.getElementById('s-points-role')?.value  || '',
       promotion_role_id:    document.getElementById('s-promo-role')?.value,
       promotion_channel_id: document.getElementById('s-promo-channel')?.value,
       dm_transcript:        document.getElementById('s-dm-transcript')?.checked,
@@ -2275,6 +2495,19 @@ async function saveSettings() {
     });
     toast('تم حفظ الإعدادات ✅', 'success');
   } catch (err) { toast(err.message, 'error'); }
+}
+
+async function syncPointsRole() {
+  const btn = document.querySelector('button[onclick="syncPointsRole()"]');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ جاري المزامنة...'; }
+  try {
+    const data = await api('POST', `/api/guild/${GUILD_ID}/sync-points-role`);
+    toast(`✅ تمت المزامنة: ${data.synced} عضو من رتبة "${data.roleName}"`, 'success');
+  } catch (err) {
+    toast(`❌ ${err.message}`, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 مزامنة الأعضاء الحاليين'; }
+  }
 }
 
 async function addPromotionRule() {
