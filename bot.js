@@ -25,6 +25,15 @@ client.once(Events.ClientReady, async () => {
   console.log(`[Bot] Logged in as ${client.user.tag}`);
   client.user.setActivity('🎫 SkyTicket', { type: 3 }); // Watching
 
+  // ─── طرد البوت من أي سيرفر غير مصرح به ──────────────────────────────────
+  for (const [, guild] of client.guilds.cache) {
+    if (guild.id !== process.env.GUILD_ID) {
+      console.warn(`[Security] Leaving unauthorized guild: ${guild.name} (${guild.id})`);
+      await guild.leave().catch(() => {});
+    }
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
   await registerCommands(client);
   await db.ensureGuild(process.env.GUILD_ID).catch(() => {});
 
@@ -124,6 +133,15 @@ client.on(Events.MessageCreate, async message => {
     }
   }
 });
+
+// ─── منع إضافة البوت لسيرفرات غير مصرح بها ────────────────────────────────
+client.on(Events.GuildCreate, async (guild) => {
+  if (guild.id !== process.env.GUILD_ID) {
+    console.warn(`[Security] Joined unauthorized guild: ${guild.name} (${guild.id}) — leaving immediately.`);
+    await guild.leave().catch(() => {});
+  }
+});
+// ──────────────────────────────────────────────────────────────────────────────
 
 // ─── Role-based Points Sync ───────────────────────────────────────────────────
 client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
