@@ -244,7 +244,7 @@ async function handleCommand(interaction, client) {
       if (!mainPanel)
         return interaction.editReply({ content: `❌ اللوحة **${ids[0]}** غير موجودة.` });
 
-      const { sendPanelEmbed, sendMultiPanelEmbed } = require('./tickets');
+      const { sendMultiPanelEmbed } = require('./tickets');
 
       if (ids.length === 1) {
         // سلوك قديم — لوحة واحدة
@@ -348,7 +348,7 @@ async function handleCommand(interaction, client) {
 
     const lines = await Promise.all(board.map(async (row, index) => {
       const member = interaction.guild.members.cache.get(row.user_id) || await interaction.guild.members.fetch(row.user_id).catch(() => null);
-      const name = member?.user?.tag || `<@${row.user_id}>`;
+      const name = member?.displayName || member?.user?.username || `<@${row.user_id}>`;
       const rank = getRankInfo(row.points || 0).name;
       const weekly = scope === 'weekly' ? ` • هذا الأسبوع: **${row.points || 0}**` : ` • أسبوعيًا: **${row.weekly_points || 0}**`;
       return `**${index + 1}.** ${name} • **${row.points || 0}** نقطة • ${rank}${weekly}`;
@@ -517,7 +517,7 @@ async function handleCommand(interaction, client) {
         .setColor('#6366f1')
         .setTitle('📝 ملاحظة داخلية')
         .setDescription(text)
-        .setFooter({ text: `بواسطة ${interaction.user.tag}` })
+        .setFooter({ text: `بواسطة ${interaction.user.displayName || interaction.user.username}` })
         .setTimestamp();
 
       return interaction.reply({ embeds: [embed] });

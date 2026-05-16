@@ -317,6 +317,14 @@ async function handleClaimTicket(interaction, client) {
   if (ticket.claimed_by && ticket.claimed_by !== interaction.user.id)
     return interaction.reply({ content: `❌ هذه التذكرة مُستلمة بالفعل من <@${ticket.claimed_by}>.`, ephemeral: true });
 
+  // تحقق من حالة التوفر (فقط لأعضاء الداتابيز، مش الأدمن)
+  const isAdmin2 = interaction.member.permissions.has('Administrator');
+  if (!isAdmin2) {
+    const staffRecord = (await db.getStaff(interaction.guild.id)).find(s => s.user_id === interaction.user.id);
+    if (staffRecord && staffRecord.available === false)
+      return interaction.reply({ content: '❌ أنت في وضع "غير متاح". استخدم `/staff toggle` لتفعيل الاستلام.', ephemeral: true });
+  }
+
   // Auto-insert into staff table so points are tracked (for role-based staff)
   await db.addStaff(interaction.guild.id, interaction.user.id, 'auto').catch(() => {});
 
@@ -330,12 +338,13 @@ async function handleClaimTicket(interaction, client) {
 
   const embed = new EmbedBuilder()
     .setColor('#22c55e')
-    .setDescription(`✅ تم استلام التذكرة بواسطة ${interaction.user}\n\nسيتم مساعدتك في أقرب وقت ممكن.`);
+    .setAuthor({ name: interaction.user.displayName, iconURL: interaction.user.displayAvatarURL() })
+    .setDescription(`✅ **تم استلام التذكرة**\n\n${interaction.user} هو المسؤول عن هذه التذكرة الآن.\nسيتم مساعدتك في أقرب وقت ممكن.`)
+    .setTimestamp();
 
-  // FIX: update to claimed row (close | unclaim | settings) instead of removing all buttons
   const row = buildClaimedRow(channelId, panel);
   await interaction.update({ components: [row] });
-  await interaction.channel.send({ embeds: [embed] });
+  await interaction.channel.send({ content: `<@${ticket.user_id}>`, embeds: [embed] });
   await db.addLog(interaction.guild.id, 'TICKET_CLAIM', interaction.user.id, ticket.user_id, { ticket_id: ticket.id });
   await sendEventLog(interaction.guild.id, 'CLAIM', interaction.user.id, ticket);
 }
@@ -645,6 +654,10 @@ async function handleRatingSelect(interaction, client) {
   const ticket = await db.getTicket(channelId);
   if (!ticket) return interaction.update({ components: [] });
 
+  // منع التقييم المكرر
+  if (ticket.rating != null)
+    return interaction.reply({ content: '✅ لقد قيّمت هذه التذكرة مسبقاً.', ephemeral: true });
+
   if (interaction.user.id !== ticket.user_id)
     return interaction.reply({ content: '❌ فقط صاحب التذكرة يمكنه التقييم.', ephemeral: true });
 
@@ -755,7 +768,6 @@ async function handleConfirmDelete(interaction, client) {
   }, 3000);
 }
 
-// ─── Export ────────────────────────────────────────────────────────────────
 // ════════════════════════════════════════════════════════════════════════════
 //  MULTI-PANEL EMBED  (لوحة رئيسية + لوحات إضافية كأزرار)
 // ════════════════════════════════════════════════════════════════════════════
