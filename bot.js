@@ -27,6 +27,29 @@ client.once(Events.ClientReady, async () => {
 
   await registerCommands(client);
   await db.ensureGuild(process.env.GUILD_ID).catch(() => {});
+
+  // مزامنة رتبة النقاط عند الإقلاع
+  try {
+    const guildData = await db.getGuild(process.env.GUILD_ID);
+    if (guildData?.points_role_id) {
+      const guild = client.guilds.cache.get(process.env.GUILD_ID);
+      if (guild) {
+        await guild.members.fetch().catch(() => {});
+        const role = guild.roles.cache.get(guildData.points_role_id);
+        if (role) {
+          let synced = 0;
+          for (const [memberId] of role.members) {
+            await db.addStaff(guild.id, memberId, 'role_sync').catch(() => {});
+            synced++;
+          }
+          console.log(`[RoleSync] Startup sync: ${synced} members added from role "${role.name}"`);
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[RoleSync] Startup sync error:', e.message);
+  }
+
   console.log('[Bot] Ready ✅');
 });
 
@@ -99,6 +122,31 @@ client.on(Events.MessageCreate, async message => {
         break; // Only first match
       }
     }
+  }
+});
+
+// ─── Role-based Points Sync ───────────────────────────────────────────────────
+client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
+  try {
+    const guildId = newMember.guild.id;
+    const userId  = newMember.user.id;
+
+    const guildData = await db.getGuild(guildId).catch(() => null);
+    if (!guildData?.points_role_id) return;
+
+    const roleId  = guildData.points_role_id;
+    const hadRole = oldMember.roles.cache.has(roleId);
+    const hasRole = newMember.roles.cache.has(roleId);
+
+    if (!hadRole && hasRole) {
+      await db.addStaff(guildId, userId, 'role_sync').catch(() => {});
+      console.log(`[RoleSync] Added ${userId} (${newMember.user.username}) via points role`);
+    } else if (hadRole && !hasRole) {
+      await db.removeStaff(guildId, userId).catch(() => {});
+      console.log(`[RoleSync] Removed ${userId} (${newMember.user.username}) via points role`);
+    }
+  } catch (err) {
+    console.error('[RoleSync] GuildMemberUpdate error:', err);
   }
 });
 

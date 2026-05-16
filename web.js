@@ -272,6 +272,16 @@ app.get('/guild/:id', ensureAuth, ensureGuildAdminPage, async (req, res) => {
       .sort((a, b) => a.position - b.position)
       .map(ch => ({ id: ch.id, name: ch.name }));
 
+    // إثراء اللوحات بأسماء القنوات والرتب بدلاً من IDs
+    const allChannels = guild.channels.cache;
+    const allRoles    = guild.roles.cache;
+    const enrichedPanels = panels.map(p => ({
+      ...p,
+      category_open_name:  p.category_open  ? (allChannels.get(p.category_open)?.name  || null) : null,
+      category_close_name: p.category_close ? (allChannels.get(p.category_close)?.name || null) : null,
+      mention_role_name:   p.mention_role   ? (allRoles.get(p.mention_role)?.name       || null) : null,
+    }));
+
     // Collect all user IDs we need to resolve
     const allUserIds = new Set([
       ...staffList.map(s => s.user_id),
@@ -331,7 +341,7 @@ app.get('/guild/:id', ensureAuth, ensureGuildAdminPage, async (req, res) => {
       user:      req.user,
       guild:     { id: guild.id, name: guild.name, icon: guild.iconURL({ dynamic: true }) },
       guildData,
-      panels,
+      panels: enrichedPanels,
       staff:     enrichedStaff,
       keywords,
       tickets:   enriched,
@@ -545,7 +555,8 @@ app.post('/api/guild/:guildId/settings', ensureAuth, ensureGuildAdmin, async (re
   try {
     const allowed = ['max_tickets_per_user','auto_close_hours','auto_close_warn_hours',
                      'log_channel_id','dm_transcript','ping_on_open','require_close_reason',
-                     'ticket_prefix','rating_channel_id','staff_role_id','promotion_role_id','promotion_channel_id'];
+                     'ticket_prefix','rating_channel_id','staff_role_id','points_role_id',
+                     'promotion_role_id','promotion_channel_id'];
     const updates = {};
     allowed.forEach(k => {
       if (req.body[k] !== undefined) {
@@ -559,6 +570,31 @@ app.post('/api/guild/:guildId/settings', ensureAuth, ensureGuildAdmin, async (re
     await db.updateGuildSettings(req.params.guildId, updates);
     await db.addLog(req.params.guildId, 'SETTINGS_UPDATE', req.user.id, null, updates);
     res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+//  API — SYNC POINTS ROLE
+// ════════════════════════════════════════════════════════════════════════════
+app.post('/api/guild/:guildId/sync-points-role', ensureAuth, ensureGuildAdmin, async (req, res) => {
+  try {
+    const guild     = req.guild;
+    const guildData = await db.getGuild(guild.id);
+    if (!guildData?.points_role_id)
+      return res.status(400).json({ error: 'لم يتم تحديد رتبة النقاط بعد. احفظ الإعدادات أولاً.' });
+
+    await guild.members.fetch().catch(() => {});
+    const role = guild.roles.cache.get(guildData.points_role_id);
+    if (!role)
+      return res.status(404).json({ error: 'الرتبة غير موجودة في السيرفر' });
+
+    let synced = 0;
+    for (const [memberId] of role.members) {
+      await db.addStaff(guild.id, memberId, 'role_sync').catch(() => {});
+      synced++;
+    }
+    await db.addLog(guild.id, 'SETTINGS_UPDATE', req.user.id, null, { action: 'sync_points_role', role: role.name, synced });
+    res.json({ success: true, synced, roleName: role.name });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
