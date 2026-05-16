@@ -1738,7 +1738,7 @@ function initLeaderboard() {
         <span style="font-size:16px;width:24px;text-align:center">${medals[i]}</span>
         <div style="flex:1;min-width:0">
           <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-            <span style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.user_id}</span>
+            <span style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.displayName || s.user_id}</span>
             <span style="font-size:11px;color:var(--accent);font-weight:700">${s.tickets_closed || 0}</span>
           </div>
           <div style="height:4px;background:var(--bg4);border-radius:2px;overflow:hidden">
