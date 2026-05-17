@@ -138,11 +138,15 @@ async function handleInteraction(interaction, client) {
   if (interaction.isButton()) {
     if (id.startsWith('open_ticket:'))     return handleOpenTicket(interaction, client);
     if (id.startsWith('close_ticket:'))    return handleCloseTicket(interaction, client);
+    if (id.startsWith('reopen_ticket:'))   return handleReopenTicket(interaction, client);
     if (id.startsWith('claim_ticket:'))    return handleClaimTicket(interaction, client);
     if (id.startsWith('unclaim_ticket:'))  return handleUnclaimTicket(interaction, client);
     if (id.startsWith('settings_ticket:')) return handleSettingsTicket(interaction, client);
     if (id.startsWith('rename_ticket:'))   return handleRenameTicketBtn(interaction, client);
     if (id.startsWith('ping_owner:'))      return handlePingOwner(interaction, client);
+    if (id.startsWith('transfer_ticket:')) return handleTransferBtn(interaction, client);
+    if (id.startsWith('add_to_ticket:'))   return handleAddUserBtn(interaction, client);
+    if (id.startsWith('call_staff:'))      return handleCallStaffBtn(interaction, client);
     if (id.startsWith('confirm_close:'))   return handleConfirmClose(interaction, client);
     if (id.startsWith('cancel_close:'))    return interaction.update({ components: [] });
     if (id.startsWith('delete_ticket:'))   return handleDeleteTicket(interaction, client);
@@ -152,9 +156,11 @@ async function handleInteraction(interaction, client) {
 
   // ─── Modals ───────────────────────────────────────────────────────────
   if (interaction.isModalSubmit()) {
-    if (id.startsWith('modal_open:'))   return handleOpenModal(interaction, client);
-    if (id.startsWith('modal_close:'))  return handleCloseModal(interaction, client);
-    if (id.startsWith('modal_rename:')) return handleRenameModal(interaction, client);
+    if (id.startsWith('modal_open:'))      return handleOpenModal(interaction, client);
+    if (id.startsWith('modal_close:'))     return handleCloseModal(interaction, client);
+    if (id.startsWith('modal_rename:'))    return handleRenameModal(interaction, client);
+    if (id.startsWith('modal_transfer:'))  return handleTransferModal(interaction, client);
+    if (id.startsWith('modal_add_user:'))  return handleAddUserModal(interaction, client);
   }
 
   // ─── Select Menus ─────────────────────────────────────────────────────
@@ -317,6 +323,14 @@ async function handleClaimTicket(interaction, client) {
   if (ticket.claimed_by && ticket.claimed_by !== interaction.user.id)
     return interaction.reply({ content: `❌ هذه التذكرة مُستلمة بالفعل من <@${ticket.claimed_by}>.`, ephemeral: true });
 
+  // منع صاحب التذكرة من استلام تذكرته
+  if (interaction.user.id === ticket.user_id)
+    return interaction.reply({ content: '❌ لا يمكنك استلام تذكرتك الخاصة.', ephemeral: true });
+
+  // منع الستاف من استلام تذكرة فتحها هو
+  if (ticket.opened_by === interaction.user.id)
+    return interaction.reply({ content: '❌ لا يمكنك استلام تذكرة فتحتها أنت.', ephemeral: true });
+
   // تحقق من حالة التوفر (فقط لأعضاء الداتابيز، مش الأدمن)
   const isAdmin2 = interaction.member.permissions.has('Administrator');
   if (!isAdmin2) {
@@ -338,13 +352,19 @@ async function handleClaimTicket(interaction, client) {
 
   const embed = new EmbedBuilder()
     .setColor('#22c55e')
-    .setAuthor({ name: interaction.user.displayName, iconURL: interaction.user.displayAvatarURL() })
-    .setDescription(`✅ **تم استلام التذكرة**\n\n${interaction.user} هو المسؤول عن هذه التذكرة الآن.\nسيتم مساعدتك في أقرب وقت ممكن.`)
+    .setAuthor({ name: interaction.user.displayName || interaction.user.username, iconURL: interaction.user.displayAvatarURL() })
+    .setTitle('✅ تم استلام التذكرة')
+    .setDescription(`${interaction.user} هو المسؤول عن هذه التذكرة الآن.\nسيتم مساعدتك في أقرب وقت ممكن.`)
     .setTimestamp();
 
   const row = buildClaimedRow(channelId, panel);
+
+  // تحديث أزرار الرسالة الأصلية (claim → unclaim)
   await interaction.update({ components: [row] });
-  await interaction.channel.send({ content: `<@${ticket.user_id}>`, embeds: [embed] });
+
+  // إرسال إعلان مرئي للكل في القناة
+  await interaction.channel.send({ embeds: [embed] });
+
   await db.addLog(interaction.guild.id, 'TICKET_CLAIM', interaction.user.id, ticket.user_id, { ticket_id: ticket.id });
   await sendEventLog(interaction.guild.id, 'CLAIM', interaction.user.id, ticket);
 }
@@ -371,8 +391,11 @@ async function handleUnclaimTicket(interaction, client) {
   const row   = buildOpenRow(channelId, panel);
 
   const embed = new EmbedBuilder()
-    .setColor('#6b7280')
-    .setDescription(`↩️ تم إلغاء استلام التذكرة بواسطة ${interaction.user}`);
+    .setColor('#f59e0b')
+    .setAuthor({ name: interaction.user.displayName || interaction.user.username, iconURL: interaction.user.displayAvatarURL() })
+    .setTitle('↩️ تم إلغاء استلام التذكرة')
+    .setDescription(`قام ${interaction.user} بإلغاء استلام هذه التذكرة.\nالتذكرة متاحة الآن لأي عضو دعم.`)
+    .setTimestamp();
 
   await interaction.update({ components: [row] });
   await interaction.channel.send({ embeds: [embed] });
@@ -392,20 +415,35 @@ async function handleSettingsTicket(interaction, client) {
   if (!isStaff && !isAdmin)
     return interaction.reply({ content: '❌ هذا الزر للدعم فقط.', ephemeral: true });
 
-  const row = new ActionRowBuilder().addComponents(
+  const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`rename_ticket:${channelId}`)
-      .setLabel('✏️ تغيير اسم التذكرة')
+      .setLabel('✏️ تغيير الاسم')
       .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
       .setCustomId(`ping_owner:${channelId}`)
       .setLabel('📢 استدعاء صاحب التذكرة')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(`add_to_ticket:${channelId}`)
+      .setLabel('➕ إضافة شخص')
+      .setStyle(ButtonStyle.Secondary)
+  );
+
+  const row2 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`transfer_ticket:${channelId}`)
+      .setLabel('🔄 نقل التذكرة لإداري آخر')
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId(`call_staff:${channelId}`)
+      .setLabel('🆘 استدعاء مسؤول آخر')
       .setStyle(ButtonStyle.Secondary)
   );
 
   await interaction.reply({
     content: '⚙️ **إعدادات التذكرة** — اختر إجراءً:',
-    components: [row],
+    components: [row1, row2],
     ephemeral: true
   });
 }
@@ -584,8 +622,12 @@ async function doClose(interaction, client, channelId, reason = null) {
     .setTimestamp();
   if (reason) embed.addFields({ name: 'سبب الإغلاق', value: reason });
 
-  // ─── زر الحذف في القناة ───────────────────────────────────────────────
+  // ─── زر الحذف وإعادة الفتح في القناة ────────────────────────────────────
   const deleteRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`reopen_ticket:${channelId}`)
+      .setLabel('🔓 إعادة فتح')
+      .setStyle(ButtonStyle.Success),
     new ButtonBuilder()
       .setCustomId(`delete_ticket:${channelId}`)
       .setLabel('🗑️ حذف التذكرة')
@@ -769,6 +811,166 @@ async function handleConfirmDelete(interaction, client) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+//  REOPEN TICKET
+// ════════════════════════════════════════════════════════════════════════════
+async function handleReopenTicket(interaction, client) {
+  const channelId = interaction.customId.split(':')[1];
+  const ticket    = await db.getTicket(channelId);
+  if (!ticket) return interaction.reply({ content: '❌ التذكرة غير موجودة.', ephemeral: true });
+
+  const isStaff = await checkStaff(interaction.guild.id, interaction.member);
+  const isAdmin = interaction.member.permissions.has('Administrator');
+  if (!isStaff && !isAdmin)
+    return interaction.reply({ content: '❌ هذا الزر للدعم فقط.', ephemeral: true });
+
+  // أعد حالة التذكرة لـ open
+  await db.updateTicket(channelId, {
+    status:     'open',
+    closed_at:  null,
+    close_reason: null,
+    claimed_by: null,
+    auto_close_warned: false
+  });
+
+  // أعد صلاحية الكتابة لصاحب التذكرة
+  await interaction.channel.permissionOverwrites.edit(ticket.user_id, {
+    ViewChannel: true, SendMessages: true, ReadMessageHistory: true
+  }).catch(() => {});
+
+  // أعد فتح الصلاحيات للستاف
+  await unlockTicketForAll(interaction.channel, interaction.guild.id);
+
+  const panel = ticket.panel_id ? await db.getPanel(ticket.panel_id) : null;
+  const row   = buildOpenRow(channelId, panel);
+
+  const embed = new EmbedBuilder()
+    .setColor('#22c55e')
+    .setAuthor({ name: interaction.user.displayName || interaction.user.username, iconURL: interaction.user.displayAvatarURL() })
+    .setTitle('🔓 تمت إعادة فتح التذكرة')
+    .setDescription(`قام ${interaction.user} بإعادة فتح هذه التذكرة.`)
+    .setTimestamp();
+
+  await interaction.update({ embeds: [], components: [row] });
+  await interaction.channel.send({ embeds: [embed] });
+  await db.addLog(interaction.guild.id, 'TICKET_REOPEN', interaction.user.id, ticket.user_id, { ticket_id: ticket.id });
+}
+
+// ─── Transfer — زر يفتح modal لاختيار اسم الستاف ─────────────────────────────
+async function handleTransferBtn(interaction, client) {
+  const channelId = interaction.customId.split(':')[1];
+  const ticket    = await db.getTicket(channelId);
+  if (!ticket) return interaction.reply({ content: '❌ التذكرة غير موجودة.', ephemeral: true });
+
+  const isAdmin    = interaction.member.permissions.has('Administrator');
+  const isStaffChk = await checkStaff(interaction.guild.id, interaction.member);
+  if (!isAdmin && !isStaffChk)
+    return interaction.reply({ content: '❌ هذا الزر للدعم فقط.', ephemeral: true });
+
+  const modal = new ModalBuilder()
+    .setCustomId(`modal_transfer:${channelId}`)
+    .setTitle('نقل التذكرة لإداري آخر');
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(
+      new TextInputBuilder()
+        .setCustomId('staff_id')
+        .setLabel('أدخل ID المسؤول الجديد')
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder('مثال: 123456789012345678')
+        .setMinLength(17).setMaxLength(20).setRequired(true)
+    )
+  );
+  return interaction.showModal(modal);
+}
+
+async function handleTransferModal(interaction, client) {
+  const channelId = interaction.customId.split(':')[1];
+  const staffId   = interaction.fields.getTextInputValue('staff_id').trim();
+  const ticket    = await db.getTicket(channelId);
+  if (!ticket) return interaction.reply({ content: '❌ التذكرة غير موجودة.', ephemeral: true });
+
+  const isNewStaff = await db.isStaff(interaction.guild.id, staffId);
+  const newMember  = await interaction.guild.members.fetch(staffId).catch(() => null);
+  const isAdmin    = newMember?.permissions?.has('Administrator');
+  if (!isNewStaff && !isAdmin)
+    return interaction.reply({ content: '❌ هذا المستخدم ليس في فريق الدعم.', ephemeral: true });
+
+  await db.claimTicket(channelId, staffId);
+  await lockTicketToStaff(interaction.channel, interaction.guild.id, staffId, ticket.user_id);
+  await db.addLog(interaction.guild.id, 'TICKET_TRANSFER', interaction.user.id, staffId, { ticket_id: ticket.id });
+
+  const embed = new EmbedBuilder()
+    .setColor('#3b82f6')
+    .setTitle('🔄 تم نقل التذكرة')
+    .setDescription(`قام ${interaction.user} بنقل التذكرة إلى <@${staffId}>\nالمسؤول الجديد هو <@${staffId}>`)
+    .setTimestamp();
+
+  await interaction.reply({ content: '✅ تم نقل التذكرة بنجاح.', ephemeral: true });
+  await interaction.channel.send({ embeds: [embed] });
+}
+
+// ─── Add user to ticket — modal ───────────────────────────────────────────────
+async function handleAddUserBtn(interaction, client) {
+  const channelId = interaction.customId.split(':')[1];
+  const modal = new ModalBuilder()
+    .setCustomId(`modal_add_user:${channelId}`)
+    .setTitle('إضافة شخص إلى التذكرة');
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(
+      new TextInputBuilder()
+        .setCustomId('user_id')
+        .setLabel('أدخل ID الشخص')
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder('مثال: 123456789012345678')
+        .setMinLength(17).setMaxLength(20).setRequired(true)
+    )
+  );
+  return interaction.showModal(modal);
+}
+
+async function handleAddUserModal(interaction, client) {
+  const channelId = interaction.customId.split(':')[1];
+  const userId    = interaction.fields.getTextInputValue('user_id').trim();
+
+  const member = await interaction.guild.members.fetch(userId).catch(() => null);
+  if (!member)
+    return interaction.reply({ content: '❌ لم يتم العثور على هذا المستخدم في السيرفر.', ephemeral: true });
+
+  await interaction.channel.permissionOverwrites.edit(member, {
+    ViewChannel: true, SendMessages: true, ReadMessageHistory: true
+  }).catch(() => {});
+
+  await interaction.reply({
+    content: `✅ تمت إضافة ${member} إلى التذكرة.`,
+    ephemeral: true
+  });
+}
+
+// ─── Call staff — يبعث ping للستاف المتاحين في القناة ────────────────────────
+async function handleCallStaffBtn(interaction, client) {
+  const channelId = interaction.customId.split(':')[1];
+  const ticket    = await db.getTicket(channelId);
+  if (!ticket) return interaction.reply({ content: '❌ التذكرة غير موجودة.', ephemeral: true });
+
+  const guildData  = await db.getGuild(interaction.guild.id);
+  const staffList  = await db.getStaff(interaction.guild.id);
+  const available  = staffList.filter(s => s.available !== false && s.user_id !== ticket.claimed_by);
+
+  let mentionText = '';
+  if (guildData?.staff_role_id) {
+    mentionText = `<@&${guildData.staff_role_id}>`;
+  } else if (available.length) {
+    mentionText = available.map(s => `<@${s.user_id}>`).join(' ');
+  } else {
+    mentionText = '⚠️ لا يوجد ستاف متاح حالياً.';
+  }
+
+  await interaction.update({ content: '✅ تم الاستدعاء.', components: [] });
+  await interaction.channel.send({
+    content: `${mentionText}\n🆘 **طلب مساعدة** — تذكرة تحتاج لمسؤول إضافي.`
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 //  MULTI-PANEL EMBED  (لوحة رئيسية + لوحات إضافية كأزرار)
 // ════════════════════════════════════════════════════════════════════════════
 async function sendMultiPanelEmbed(channel, mainPanel, extraPanels, guild) {
@@ -809,4 +1011,4 @@ async function sendMultiPanelEmbed(channel, mainPanel, extraPanels, guild) {
   return msg;
 }
 
-module.exports = { handleInteraction, lockTicketToStaff, unlockTicketForAll, sendMultiPanelEmbed };
+module.exports = { handleInteraction, lockTicketToStaff, unlockTicketForAll, sendMultiPanelEmbed, doClose };

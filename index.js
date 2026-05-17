@@ -62,14 +62,25 @@ async function checkAutoClose() {
         await db.closeTicket(ticket.channel_id, 'إغلاق تلقائي بسبب عدم النشاط');
         await db.addLog(guild.id, 'AUTO_CLOSE', null, ticket.user_id, { ticket_id: ticket.id });
 
-        const { EmbedBuilder } = require('discord.js');
-        const embed = new EmbedBuilder()
+        const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+        const closeEmbed = new EmbedBuilder()
           .setColor('#ef4444')
           .setTitle('🔒 تم إغلاق التذكرة تلقائياً')
           .setDescription(`تم إغلاق هذه التذكرة بسبب عدم النشاط لمدة **${closeHours} ساعة**.`)
           .setTimestamp();
 
-        await channel.send({ embeds: [embed] }).catch(() => {});
+        const actionRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`reopen_ticket:${ticket.channel_id}`)
+            .setLabel('🔓 إعادة فتح')
+            .setStyle(ButtonStyle.Success),
+          new ButtonBuilder()
+            .setCustomId(`delete_ticket:${ticket.channel_id}`)
+            .setLabel('🗑️ حذف')
+            .setStyle(ButtonStyle.Danger)
+        );
+
+        await channel.send({ embeds: [closeEmbed], components: [actionRow] }).catch(() => {});
         await new Promise(r => setTimeout(r, 5000));
 
         // Save transcript
@@ -80,13 +91,13 @@ async function checkAutoClose() {
           await db.saveTranscript(ticket.id, guild.id, content);
         } catch {}
 
-        await channel.delete('Auto-close: inactive').catch(() => {});
+        await channel.permissionOverwrites.edit(ticket.user_id, { SendMessages: false }).catch(() => {});
 
         if (ticket.claimed_by) {
           await db.incrementStaffClosed(guild.id, ticket.claimed_by);
         }
 
-      } else if (inactiveHrs >= warnHours) {
+      } else if (inactiveHrs >= warnHours && !ticket.auto_close_warned) {
         // ── Send warning (only once per ticket by checking a flag) ──────
         const remaining = Math.round(closeHours - inactiveHrs);
         const { EmbedBuilder } = require('discord.js');
@@ -96,6 +107,7 @@ async function checkAutoClose() {
           .setDescription(`<@${ticket.user_id}> ستُغلق هذه التذكرة خلال **${remaining} ساعة** إذا لم يكن هناك أي نشاط.\n\nأرسل أي رسالة لمنع الإغلاق التلقائي.`)
           .setTimestamp();
         await channel.send({ embeds: [embed] }).catch(() => {});
+        await db.updateTicket(ticket.channel_id, { auto_close_warned: true });
       }
     }
   } catch (err) {

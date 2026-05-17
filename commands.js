@@ -151,6 +151,10 @@ const commands = [
       .setDescription('نقل التذكرة لعضو دعم آخر')
       .addUserOption(o => o.setName('staff').setDescription('عضو الدعم').setRequired(true)))
     .addSubcommand(sub => sub
+      .setName('close')
+      .setDescription('إغلاق التذكرة الحالية')
+      .addStringOption(o => o.setName('reason').setDescription('سبب الإغلاق (اختياري)').setRequired(false)))
+    .addSubcommand(sub => sub
       .setName('note')
       .setDescription('إضافة ملاحظة داخلية (مرئية للدعم فقط)')
       .addStringOption(o => o.setName('text').setDescription('نص الملاحظة').setRequired(true))),
@@ -493,16 +497,29 @@ async function handleCommand(interaction, client) {
       if (!isNewStaff) return interaction.reply({ content: '❌ هذا المستخدم ليس في فريق الدعم.', ephemeral: true });
 
       await db.claimTicket(interaction.channel.id, newStaff.id);
-
-      // نفس منطق قفل الصلاحيات الموجود في claim
       const { lockTicketToStaff } = require('./tickets');
       await lockTicketToStaff(interaction.channel, interaction.guild.id, newStaff.id, ticket.user_id);
-
       await db.addLog(interaction.guild.id, 'TICKET_TRANSFER', interaction.user.id, newStaff.id, { ticket_id: ticket.id });
 
       const embed = new EmbedBuilder().setColor('#3b82f6')
-        .setDescription(`🔄 تم نقل التذكرة من ${interaction.user} إلى ${newStaff}`);
+        .setTitle('🔄 تم نقل التذكرة')
+        .setDescription(`قام ${interaction.user} بنقل التذكرة إلى ${newStaff}\nالمسؤول الجديد هو ${newStaff}`)
+        .setTimestamp();
       return interaction.reply({ embeds: [embed] });
+    }
+
+    if (sub === 'close') {
+      const isStaff = await db.isStaff(interaction.guild.id, interaction.user.id);
+      const isAdmin = interaction.member.permissions.has('Administrator');
+      const isOwner = interaction.user.id === ticket.user_id;
+      if (!isStaff && !isAdmin && !isOwner)
+        return interaction.reply({ content: '❌ ليس لديك صلاحية إغلاق هذه التذكرة.', ephemeral: true });
+
+      const reason = interaction.options.getString('reason') || null;
+      await interaction.deferReply({ ephemeral: true });
+      const { doClose } = require('./tickets');
+      await doClose(interaction, client, interaction.channel.id, reason);
+      return interaction.editReply({ content: '✅ تم إغلاق التذكرة.' });
     }
 
     if (sub === 'note') {
